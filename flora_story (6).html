@@ -1,0 +1,1429 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Flora Story - 专属花历</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@500;700&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        serif: ['"Noto Serif SC"', 'serif'],
+                    },
+                    colors: {
+                        background: "#F5F5F7",
+                        primary: {
+                            DEFAULT: "#D2A5B3",
+                            light: "#F6EBED",
+                            dark: "#A67684",
+                        },
+                        surface: "rgba(255, 255, 255, 0.65)",
+                    },
+                    boxShadow: {
+                        glass: "0 8px 32px -4px rgba(0, 0, 0, 0.05)",
+                        glow: "0 8px 25px -5px rgba(210, 165, 179, 0.4)",
+                        polaroid: "0 15px 35px -5px rgba(0, 0, 0, 0.15)",
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        body { -webkit-font-smoothing: antialiased; }
+        .glass-card {
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+        }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        .reveal-card {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: all 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .reveal-card.left { transform: translate(-20px, 30px); }
+        .reveal-card.right { transform: translate(20px, 30px); }
+        .reveal-card.active {
+            opacity: 1;
+            transform: translate(0, 0);
+        }
+
+        .view-section {
+            display: none !important;
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+        .view-section.active {
+            display: block !important;
+            opacity: 1;
+        }
+        #view-stats.view-section.active {
+            display: flex !important;
+        }
+
+        .modal-overlay {
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+        .modal-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .modal-content {
+            transform: translateY(100%);
+            transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .modal-overlay.active .modal-content {
+            transform: translateY(0);
+        }
+        .filter-pill {
+            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .filter-pill.active {
+            background: #D2A5B3;
+            color: white;
+            box-shadow: 0 8px 25px -5px rgba(210, 165, 179, 0.4);
+        }
+        .date-card {
+            touch-action: pan-y;
+            user-select: none;
+        }
+        .date-card.dragging {
+            cursor: grabbing;
+            transform: scale(0.98);
+        }
+        .style-option.selected {
+            background: #F6EBED;
+            border-color: #D2A5B3;
+            box-shadow: 0 12px 30px -18px rgba(210, 165, 179, 0.65);
+        }
+        .toast {
+            opacity: 0;
+            transform: translate(-50%, 12px);
+            pointer-events: none;
+            transition: all 0.28s ease;
+        }
+        .toast.active {
+            opacity: 1;
+            transform: translate(-50%, 0);
+        }
+        .record-focus {
+            box-shadow: 0 0 0 3px rgba(210, 165, 179, 0.28), 0 18px 42px -22px rgba(166, 118, 132, 0.8);
+        }
+        .flower-mini {
+            min-width: 0;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 6px 3px 4px;
+            border-radius: 999px;
+            background: linear-gradient(135deg, rgba(246, 235, 237, 0.92), rgba(255, 255, 255, 0.76));
+            border: 1px solid rgba(210, 165, 179, 0.18);
+            color: #A67684;
+        }
+        .flower-mini-icon {
+            width: 16px;
+            height: 16px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 999px;
+            background: white;
+            font-size: 10px;
+            box-shadow: 0 3px 8px rgba(166, 118, 132, 0.08);
+            flex: 0 0 auto;
+        }
+        .flower-mini-text {
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            line-height: 1.05;
+        }
+        .flower-mini-name {
+            max-width: 58px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-size: 10px;
+            font-weight: 700;
+        }
+        .flower-mini-meaning {
+            max-width: 58px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-size: 8px;
+            color: rgba(134, 104, 115, 0.72);
+        }
+        .flower-strip {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            margin-top: 9px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(210, 165, 179, 0.16);
+        }
+        .flower-chip {
+            min-width: 0;
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            padding: 3px 6px;
+            border-radius: 999px;
+            background: rgba(246, 235, 237, 0.72);
+            color: #A67684;
+            font-size: 9px;
+            font-weight: 700;
+            line-height: 1;
+        }
+        .flower-chip-name {
+            max-width: 44px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .flora-row {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 14px;
+            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.88);
+            border: 1px solid rgba(255, 255, 255, 0.9);
+            box-shadow: 0 12px 28px -20px rgba(29, 29, 31, 0.28);
+            transition: all 0.22s ease;
+            text-align: left;
+        }
+        .flora-row:active {
+            transform: scale(0.99);
+        }
+        .flora-icon {
+            width: 40px;
+            height: 40px;
+            flex: 0 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 16px;
+            background: linear-gradient(135deg, #F6EBED, #FFFFFF);
+            box-shadow: inset 0 0 0 1px rgba(210, 165, 179, 0.14);
+        }
+        .flora-copy {
+            min-width: 0;
+            flex: 1;
+            display: flex;
+            align-items: baseline;
+            gap: 7px;
+        }
+        .flora-name {
+            flex: 0 0 auto;
+            font-size: 14px;
+            font-weight: 700;
+            color: #1D1D1F;
+            line-height: 1.15;
+        }
+        .flora-meaning {
+            min-width: 0;
+            font-size: 12px;
+            color: #86868B;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .flora-count {
+            flex: 0 0 auto;
+            padding: 4px 7px;
+            border-radius: 999px;
+            background: #F6EBED;
+            color: #A67684;
+            font-size: 11px;
+            font-weight: 800;
+        }
+    </style>
+</head>
+<body class="bg-background min-h-screen text-[#1D1D1F] overflow-x-hidden pb-24">
+
+    <!-- ==================== 视图 1: 花历 (时间线) ==================== -->
+    <div id="view-timeline" class="view-section active pt-12 px-4 max-w-lg mx-auto relative">
+        
+        <!-- 头部区 -->
+        <div class="text-center mb-8 reveal-card active">
+            <h1 class="text-3xl font-serif font-bold tracking-wider mb-2 text-[#1D1D1F]">Flora Story</h1>
+            <p class="text-sm text-[#86868B]">我们的浪漫图鉴</p>
+        </div>
+
+        <!-- 筛选器区域 -->
+        <div class="space-y-3 mb-10 reveal-card active px-1">
+            <div class="glass-card bg-surface border border-white/80 shadow-glass rounded-full p-1 flex gap-1">
+                <button data-filter-group="action" data-filter-value="all" class="filter-pill active flex-1 py-2 rounded-full text-xs font-bold">全部记录</button>
+                <button data-filter-group="action" data-filter-value="received" class="filter-pill flex-1 py-2 rounded-full text-xs font-bold text-[#86868B]">收到</button>
+                <button data-filter-group="action" data-filter-value="sent" class="filter-pill flex-1 py-2 rounded-full text-xs font-bold text-[#86868B]">送出</button>
+            </div>
+            <div class="flex justify-center gap-2">
+                <button onclick="toggleYearFilter('2026')" data-filter-group="year" data-filter-value="2026" class="filter-pill active px-6 py-2 rounded-full text-xs font-bold border border-white/80">2026</button>
+            </div>
+        </div>
+
+        <!-- 藤蔓背景轴 -->
+        <div class="absolute left-1/2 top-64 bottom-0 w-[2px] -translate-x-1/2 bg-[#E5E0D8]/60 border-l border-dashed border-[#A67684]/20 z-0"></div>
+        <div id="vine" class="absolute left-1/2 top-64 bottom-0 w-[3px] -translate-x-1/2 bg-gradient-to-b from-primary to-primary-light origin-top scale-y-0 z-0"></div>
+
+        <!-- 卡片列表 -->
+        <div class="relative z-10 flex flex-col gap-10 pb-10" id="timeline-container">
+            
+            <div id="record-rose-520" class="timeline-record flex items-center w-full relative reveal-card left cursor-pointer active:scale-[0.98] transition-transform" data-action="received" data-year="2026" onclick="openFlowerDetail('属于我们的 520', ['🌹 红玫瑰：象征着热恋、激情与你是我生命中唯一的爱'], '“又是红玫瑰？虽然打安全牌，但爱意很满。”', 'https://images.unsplash.com/photo-1562690868-60bbe7293e94?auto=format&fit=crop&q=80&w=400', '这是我们在一起的第一年，虽然只是普通的红玫瑰，但他偷偷藏在背后的样子真的很可爱。', { date: '2026.05.20 · 周三', action: '收到' })">
+                <div class="absolute left-1/2 -translate-x-1/2 w-3 h-3 rounded-full bg-background border-2 border-primary shadow-glow z-20"></div>
+                <div class="w-1/2 pr-4 flex justify-end">
+                    <div class="w-full max-w-[200px] glass-card bg-surface rounded-3xl p-3 shadow-glass border border-white/80 transition-transform duration-300 hover:-translate-y-1">
+                        <div class="relative aspect-[4/5] overflow-hidden rounded-2xl mb-3 shadow-sm bg-gray-100">
+                            <img src="https://images.unsplash.com/photo-1562690868-60bbe7293e94?auto=format&fit=crop&q=80&w=400" alt="红玫瑰" class="object-cover w-full h-full">
+                            <div class="absolute top-2 left-2 bg-white/90 backdrop-blur-sm px-2 py-0.5 rounded-full text-[10px] font-bold text-primary-dark shadow-sm">05.20</div>
+                            <div class="absolute top-2 right-2 bg-primary/90 text-white px-2 py-0.5 rounded-full text-[10px] shadow-sm">收到</div>
+                        </div>
+                        <div class="px-1.5 pb-1.5 pt-1">
+                            <div class="flex items-center justify-between mb-2">
+                                <h3 class="text-base font-serif font-bold text-[#1D1D1F] truncate">属于我们的 520</h3>
+                            </div>
+                            <p class="text-xs text-[#86868B] font-serif italic leading-relaxed">“又是红玫瑰？虽然打安全牌，但爱意很满。”</p>
+                            <div class="flower-strip">
+                                <span class="flower-chip"><span>🌹</span><span class="flower-chip-name">红玫瑰</span></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="w-1/2 pl-4"></div>
+            </div>
+
+            <div id="record-spring-lisianthus" class="timeline-record flex items-center w-full relative reveal-card right mt-4 cursor-pointer active:scale-[0.98] transition-transform" data-action="sent" data-year="2026" onclick="openFlowerDetail('春日的惊喜', ['🌿 洋桔梗：代表着无邪、真诚不变的爱与纯洁的灵魂', '🤍 白百合：百年好合、庄严与心心相印'], '“洋桔梗配百合，品味在线的浪漫！”', 'https://images.unsplash.com/photo-1582791694769-d4c207f2a1a8?auto=format&fit=crop&q=80&w=400', '今天下班路过花店，觉得这束洋桔梗特别像她，清清冷冷却又很治愈，就买下来送给她了。', { date: '2026.04.12 · 周日', action: '送出' })">
+                <div class="absolute left-1/2 -translate-x-1/2 w-3 h-3 rounded-full bg-background border-2 border-primary shadow-glow z-20"></div>
+                <div class="w-1/2 pr-4"></div>
+                <div class="w-1/2 pl-4 flex justify-start">
+                    <div class="w-full max-w-[200px] glass-card bg-surface rounded-3xl p-3 shadow-glass border border-white/80 transition-transform duration-300 hover:-translate-y-1">
+                        <div class="relative aspect-[4/5] overflow-hidden rounded-2xl mb-3 shadow-sm bg-gray-100">
+                            <img src="https://images.unsplash.com/photo-1582791694769-d4c207f2a1a8?auto=format&fit=crop&q=80&w=400" alt="洋桔梗" class="object-cover w-full h-full">
+                            <div class="absolute top-2 left-2 bg-white/90 backdrop-blur-sm px-2 py-0.5 rounded-full text-[10px] font-bold text-primary-dark shadow-sm">04.12</div>
+                            <div class="absolute top-2 right-2 bg-[#86868B]/80 text-white px-2 py-0.5 rounded-full text-[10px] shadow-sm">送出</div>
+                        </div>
+                        <div class="px-1.5 pb-1.5 pt-1">
+                            <div class="flex items-center justify-between mb-2">
+                                <h3 class="text-base font-serif font-bold text-[#1D1D1F] truncate">春日的惊喜</h3>
+                            </div>
+                            <p class="text-xs text-[#86868B] font-serif italic leading-relaxed">“洋桔梗配百合，品味在线的浪漫！”</p>
+                            <div class="flower-strip">
+                                <span class="flower-chip"><span>🌿</span><span class="flower-chip-name">洋桔梗</span></span>
+                                <span class="flower-chip"><span>🤍</span><span class="flower-chip-name">白百合</span></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="record-valentine-sunflower" class="timeline-record flex items-center w-full relative reveal-card left mt-4 cursor-pointer active:scale-[0.98] transition-transform" data-action="received" data-year="2026" onclick="openFlowerDetail('情人节限定', ['🌻 向日葵：入目无他人，四下皆是你，沉默但忠诚的爱', '🌼 满天星：甘愿做配角，只为衬托你的光芒'], '“向日葵的明媚，像极了今天的好天气。”', 'https://images.unsplash.com/photo-1591886884632-15f3f317ce53?auto=format&fit=crop&q=80&w=400', '其实比起玫瑰，我一直更喜欢向日葵。没想到他居然一直记得我随口说的一句话，很开心。', { date: '2026.02.14 · 周六', action: '收到' })">
+                <div class="absolute left-1/2 -translate-x-1/2 w-3 h-3 rounded-full bg-background border-2 border-primary shadow-glow z-20"></div>
+                <div class="w-1/2 pr-4 flex justify-end">
+                    <div class="w-full max-w-[200px] glass-card bg-surface rounded-3xl p-3 shadow-glass border border-white/80 transition-transform duration-300 hover:-translate-y-1">
+                        <div class="relative aspect-[4/5] overflow-hidden rounded-2xl mb-3 shadow-sm bg-gray-100">
+                            <img src="https://images.unsplash.com/photo-1591886884632-15f3f317ce53?auto=format&fit=crop&q=80&w=400" alt="向日葵" class="object-cover w-full h-full">
+                            <div class="absolute top-2 left-2 bg-white/90 backdrop-blur-sm px-2 py-0.5 rounded-full text-[10px] font-bold text-primary-dark shadow-sm">02.14</div>
+                            <div class="absolute top-2 right-2 bg-primary/90 text-white px-2 py-0.5 rounded-full text-[10px] shadow-sm">收到</div>
+                        </div>
+                        <div class="px-1.5 pb-1.5 pt-1">
+                            <div class="flex items-center justify-between mb-2">
+                                <h3 class="text-base font-serif font-bold text-[#1D1D1F] truncate">情人节限定</h3>
+                            </div>
+                            <p class="text-xs text-[#86868B] font-serif italic leading-relaxed">“向日葵的明媚，像极了今天的好天气。”</p>
+                            <div class="flower-strip">
+                                <span class="flower-chip"><span>🌻</span><span class="flower-chip-name">向日葵</span></span>
+                                <span class="flower-chip"><span>🌼</span><span class="flower-chip-name">满天星</span></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="w-1/2 pl-4"></div>
+            </div>
+
+            <div id="record-late-freesia" class="timeline-record flex items-center w-full relative reveal-card right mt-4 cursor-pointer active:scale-[0.98] transition-transform" data-action="received" data-year="2026" onclick="openFlowerDetail('夏末的一束小苍兰', ['💐 小苍兰：清甜、纯粹，像迟来的轻声问候', '🌙 尤加利叶：恩赐与回忆，把夜晚衬得更柔软'], '“深夜 23:32 写下它，像把想念轻轻按进花瓣里。”', 'https://images.unsplash.com/photo-1526047932273-341f2a7631f9?auto=format&fit=crop&q=80&w=400', '那天已经很晚了，但看到这束小苍兰的时候，还是想把它记下来。花很安静，像夏末最后一点温柔。', { date: '2026.08.29 · 周六', action: '收到' })">
+                <div class="absolute left-1/2 -translate-x-1/2 w-3 h-3 rounded-full bg-background border-2 border-primary shadow-glow z-20"></div>
+                <div class="w-1/2 pr-4"></div>
+                <div class="w-1/2 pl-4 flex justify-start">
+                    <div class="w-full max-w-[200px] glass-card bg-surface rounded-3xl p-3 shadow-glass border border-white/80 transition-transform duration-300 hover:-translate-y-1">
+                        <div class="relative aspect-[4/5] overflow-hidden rounded-2xl mb-3 shadow-sm bg-gray-100">
+                            <img src="https://images.unsplash.com/photo-1526047932273-341f2a7631f9?auto=format&fit=crop&q=80&w=400" alt="小苍兰" class="object-cover w-full h-full">
+                            <div class="absolute top-2 left-2 bg-white/90 backdrop-blur-sm px-2 py-0.5 rounded-full text-[10px] font-bold text-primary-dark shadow-sm">08.29</div>
+                            <div class="absolute top-2 right-2 bg-primary/90 text-white px-2 py-0.5 rounded-full text-[10px] shadow-sm">收到</div>
+                        </div>
+                        <div class="px-1.5 pb-1.5 pt-1">
+                            <div class="flex items-center justify-between mb-2">
+                                <h3 class="text-base font-serif font-bold text-[#1D1D1F] truncate">夏末的一束小苍兰</h3>
+                            </div>
+                            <p class="text-xs text-[#86868B] font-serif italic leading-relaxed">“深夜 23:32，想念轻轻按进花瓣里。”</p>
+                            <div class="flower-strip">
+                                <span class="flower-chip"><span>💐</span><span class="flower-chip-name">小苍兰</span></span>
+                                <span class="flower-chip"><span>🌙</span><span class="flower-chip-name">尤加利叶</span></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div id="timeline-empty" class="hidden glass-card bg-surface border border-white/80 rounded-3xl px-6 py-10 text-center shadow-glass">
+                <p class="text-sm font-serif text-[#86868B]">这一段时间还没有花开。</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== 视图 2: 档案 ==================== -->
+    <div id="view-stats" class="view-section pt-12 px-4 max-w-lg mx-auto min-h-screen flex flex-col pb-28">
+        
+        <div class="text-center mb-8">
+            <h1 class="text-3xl font-serif font-bold tracking-wider mb-2 text-[#1D1D1F]">花房</h1>
+            <p class="text-xs text-[#86868B] uppercase tracking-[0.2em]">你的专属数字花园</p>
+        </div>
+
+        <!-- 专属大花束 -->
+        <div class="relative w-full flex flex-col items-center justify-center mb-12">
+            <div class="relative w-full h-56 flex items-center justify-center mt-4 px-3" aria-label="专属花束合集">
+                <div class="grid grid-cols-4 items-center w-full max-w-[390px]">
+                    <button type="button" onclick="jumpToRecord('record-late-freesia')" class="relative z-10 flex justify-center transition-transform duration-500 hover:z-50 hover:scale-105 active:scale-[0.98]" style="transform: rotate(-13deg) translateY(18px);" aria-label="查看夏末的一束小苍兰">
+                        <img src="https://images.unsplash.com/photo-1526047932273-341f2a7631f9?auto=format&fit=crop&q=80&w=400" alt="夏末的一束小苍兰" class="w-[clamp(72px,22vw,96px)] h-[clamp(112px,34vw,150px)] object-cover rounded-xl shadow-polaroid border-[4px] border-white bg-white">
+                    </button>
+                    <button type="button" onclick="jumpToRecord('record-rose-520')" class="relative z-30 flex justify-center transition-transform duration-500 hover:z-50 hover:scale-105 active:scale-[0.98]" style="transform: rotate(-4deg) translateY(-6px);" aria-label="查看属于我们的 520">
+                        <img src="https://images.unsplash.com/photo-1562690868-60bbe7293e94?auto=format&fit=crop&q=80&w=400" alt="属于我们的 520" class="w-[clamp(72px,22vw,96px)] h-[clamp(112px,34vw,150px)] object-cover rounded-xl shadow-polaroid border-[4px] border-white bg-white">
+                    </button>
+                    <button type="button" onclick="jumpToRecord('record-spring-lisianthus')" class="relative z-20 flex justify-center transition-transform duration-500 hover:z-50 hover:scale-105 active:scale-[0.98]" style="transform: rotate(6deg) translateY(12px);" aria-label="查看春日的惊喜">
+                        <img src="https://images.unsplash.com/photo-1582791694769-d4c207f2a1a8?auto=format&fit=crop&q=80&w=400" alt="春日的惊喜" class="w-[clamp(72px,22vw,96px)] h-[clamp(112px,34vw,150px)] object-cover rounded-xl shadow-polaroid border-[4px] border-white bg-white">
+                    </button>
+                    <button type="button" onclick="jumpToRecord('record-valentine-sunflower')" class="relative z-40 flex justify-center transition-transform duration-500 hover:z-50 hover:scale-105 active:scale-[0.98]" style="transform: rotate(14deg) translateY(-2px);" aria-label="查看情人节限定">
+                        <img src="https://images.unsplash.com/photo-1591886884632-15f3f317ce53?auto=format&fit=crop&q=80&w=400" alt="情人节限定" class="w-[clamp(72px,22vw,96px)] h-[clamp(112px,34vw,150px)] object-cover rounded-xl shadow-polaroid border-[4px] border-white bg-white">
+                    </button>
+                </div>
+            </div>
+            
+            <div class="mt-8 flex flex-col items-center">
+                <span class="text-[10px] text-primary-dark font-bold tracking-[0.25em] uppercase">The Ultimate Bouquet</span>
+                <div class="w-12 h-px bg-primary-light mt-2"></div>
+            </div>
+        </div>
+
+        <!-- Bento Grid 成就 -->
+        <div class="grid grid-cols-2 gap-3 mb-10 px-1">
+            <button onclick="jumpToTimeline()" class="col-span-2 text-left glass-card bg-surface rounded-[24px] p-5 border border-white/80 shadow-glass flex items-center justify-between transition-transform hover:scale-[1.02] active:scale-[0.99]">
+                <div>
+                    <p class="text-[11px] text-[#86868B] font-bold mb-1.5 uppercase tracking-widest">Milestone</p>
+                    <h3 class="text-xl font-serif font-bold text-[#1D1D1F]">累计记录 24 束花</h3>
+                </div>
+                <div class="w-12 h-12 bg-gradient-to-br from-primary-light to-white rounded-full flex items-center justify-center text-2xl shadow-sm border border-white">🌸</div>
+            </button>
+
+            <div class="glass-card bg-surface rounded-[24px] p-4 border border-white/80 shadow-glass transition-transform hover:-translate-y-1">
+                <div class="w-8 h-8 bg-primary-light/50 rounded-full flex items-center justify-center mb-3">💌</div>
+                <p class="text-[10px] text-[#86868B] font-bold mb-1 uppercase tracking-widest">最常表达的心意</p>
+                <h4 class="text-sm font-serif font-bold text-[#1D1D1F] mb-1">热恋与唯一</h4>
+                <p class="text-xs text-primary-dark font-medium">出现 8 次</p>
+            </div>
+
+            <div class="glass-card bg-surface rounded-[24px] p-4 border border-white/80 shadow-glass transition-transform hover:-translate-y-1">
+                <div class="w-8 h-8 bg-[#E5E0D8]/50 rounded-full flex items-center justify-center mb-3">🌿</div>
+                <p class="text-[10px] text-[#86868B] font-bold mb-1 uppercase tracking-widest">最偏爱送出</p>
+                <h4 class="text-sm font-serif font-bold text-[#1D1D1F] mb-1">洋桔梗</h4>
+                <p class="text-xs text-[#86868B] font-medium">共送出 5 次</p>
+            </div>
+
+            <button onclick="openFlowerDetail('属于我们的 520', ['🌹 红玫瑰：象征着热恋、激情与你是我生命中唯一的爱'], '“又是红玫瑰？虽然打安全牌，但爱意很满。”', 'https://images.unsplash.com/photo-1562690868-60bbe7293e94?auto=format&fit=crop&q=80&w=400', '这是我们在一起的第一年，虽然只是普通的红玫瑰，但他偷偷藏在背后的样子真的很可爱。')" class="text-left glass-card bg-surface rounded-[24px] p-4 border border-white/80 shadow-glass transition-transform hover:-translate-y-1 active:scale-[0.98]">
+                <div class="w-8 h-8 bg-[#F0F2F5] rounded-full flex items-center justify-center mb-3">✍️</div>
+                <p class="text-[10px] text-[#86868B] font-bold mb-1 uppercase tracking-widest">纸短情长</p>
+                <h4 class="text-sm font-serif font-bold text-[#1D1D1F] mb-1">写了 78 字</h4>
+                <p class="text-xs text-[#86868B] font-medium truncate">属于我们的 520</p>
+            </button>
+
+            <button onclick="jumpToRecord('record-late-freesia')" class="text-left glass-card bg-surface rounded-[24px] p-4 border border-white/80 shadow-glass transition-transform hover:-translate-y-1 active:scale-[0.98]">
+                <div class="w-8 h-8 bg-[#1D1D1F]/5 rounded-full flex items-center justify-center mb-3">🌙</div>
+                <p class="text-[10px] text-[#86868B] font-bold mb-1 uppercase tracking-widest">深夜的思念</p>
+                <h4 class="text-sm font-serif font-bold text-[#1D1D1F] mb-1">23:32 记录</h4>
+                <p class="text-xs text-[#86868B] font-medium truncate">夏末的一束小苍兰</p>
+            </button>
+        </div>
+
+        <!-- 解锁的花卉图鉴 & 分页指示器 -->
+        <div class="px-2 mb-8">
+            <h3 class="text-sm font-serif font-bold text-[#1D1D1F] mb-4 px-1 border-l-2 border-primary pl-2">已解锁图鉴</h3>
+            <div id="flora-book-list" class="flex flex-col gap-2.5 mb-4"></div>
+            
+            <!-- 分页指示器 (Dots) -->
+            <div id="flora-book-dots" class="flex justify-end gap-1.5 px-2"></div>
+        </div>
+        
+        <!-- 新增：诗句名言模块 -->
+        <div class="mt-2 px-4 py-6 relative glass-card bg-surface rounded-3xl border border-white/80 shadow-glass mb-8">
+            <span class="absolute top-2 left-4 text-4xl text-primary opacity-20 font-serif leading-none">"</span>
+            <p class="text-sm text-[#5E6C79] font-serif italic text-center relative z-10 leading-relaxed px-4 tracking-wide">
+                我将玫瑰藏于身后，期盼与你赴约。
+            </p>
+            <p class="text-[10px] text-right text-[#86868B] mt-3 font-medium uppercase tracking-widest">—— 佚名</p>
+        </div>
+
+    </div>
+
+    <!-- ==================== 底部固定导航 & FAB ==================== -->
+    <div class="fixed bottom-0 left-0 w-full h-20 bg-background/90 backdrop-blur-xl border-t border-white/50 z-40 flex items-center justify-around px-8">
+        <button onclick="switchTab('timeline')" id="nav-timeline" class="flex flex-col items-center gap-1.5 text-primary transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+            <span class="text-[10px] font-bold">花历</span>
+        </button>
+
+        <div class="relative -top-6">
+            <button onclick="openWizard()" class="bg-primary text-white p-4 rounded-full shadow-glow flex items-center justify-center hover:scale-105 active:scale-95 transition-transform duration-200">
+                <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+            </button>
+        </div>
+
+        <button onclick="switchTab('stats')" id="nav-stats" class="flex flex-col items-center gap-1.5 text-[#86868B] transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><path d="M7 7h10"></path><path d="M7 12h10"></path><path d="M7 17h10"></path></svg>
+            <span class="text-[10px] font-bold">花房</span>
+        </button>
+    </div>
+
+    <!-- ==================== 魔法记录向导 (模态框 Overlay) ==================== -->
+    <div id="wizard-overlay" class="modal-overlay fixed inset-0 z-50 flex flex-col justify-end">
+        <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" onclick="closeWizard()"></div>
+        
+        <div class="modal-content relative w-full max-w-lg mx-auto h-[85vh] bg-[#F5F5F7] rounded-t-3xl shadow-2xl flex flex-col overflow-hidden">
+            <div class="w-full h-12 flex justify-center items-center shrink-0 cursor-pointer" onclick="closeWizard()">
+                <div class="w-12 h-1.5 bg-gray-300 rounded-full"></div>
+            </div>
+
+            <div class="flex-grow relative px-6 pb-8 overflow-y-auto hide-scrollbar">
+                
+                <div id="step-1" class="absolute w-full px-6 left-0 transition-all duration-500">
+                    <h2 class="text-2xl font-serif font-bold mb-1 text-center">记录一束花</h2>
+                    <p class="text-xs text-center text-[#86868B] mb-6">把这束花，种进你们的时间线</p>
+                    
+                    <input id="flower-file-input" type="file" accept="image/*" class="hidden">
+                    <label for="flower-file-input" id="upload-zone" class="relative bg-white rounded-3xl p-4 shadow-sm border border-dashed border-primary-light mb-5 flex flex-col items-center justify-center h-48 cursor-pointer overflow-hidden transition-transform active:scale-[0.99]">
+                        <img id="upload-preview" src="" alt="鲜花预览" class="hidden absolute inset-0 w-full h-full object-cover">
+                        <div id="upload-placeholder" class="relative z-10 flex flex-col items-center">
+                            <div class="w-12 h-12 bg-primary-light text-primary rounded-full flex items-center justify-center mb-3">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                            </div>
+                            <p class="text-sm font-medium text-gray-500">点击上传鲜花照片</p>
+                        </div>
+                        <div id="upload-change-chip" class="hidden absolute bottom-3 right-3 z-10 bg-white/90 backdrop-blur px-3 py-1 rounded-full text-[10px] font-bold text-primary-dark shadow-sm">重新选择</div>
+                    </label>
+
+                    <div class="flex gap-3 mb-5">
+                        <button data-action-choice="received" onclick="selectActionType('received')" class="action-choice flex-1 py-3 rounded-2xl bg-primary text-white font-medium shadow-md shadow-primary/30 transition-all">收到花</button>
+                        <button data-action-choice="sent" onclick="selectActionType('sent')" class="action-choice flex-1 py-3 rounded-2xl bg-white text-gray-500 font-medium border border-gray-200 transition-all">送出花</button>
+                    </div>
+
+                    <div class="mb-5">
+                        <div class="flex items-center justify-between mb-2 px-1">
+                            <p class="text-[11px] font-bold text-[#86868B] uppercase tracking-widest">花开日期</p>
+                            <button id="date-picker-trigger" type="button" class="text-[11px] font-bold text-primary-dark">选择日期</button>
+                            <input id="date-picker-input" type="date" class="sr-only" aria-label="选择花开日期">
+                        </div>
+                        <div id="date-drag-card" class="date-card glass-card bg-white/80 border border-white rounded-3xl shadow-glass px-4 py-4 flex items-center justify-between cursor-grab transition-transform">
+                            <span class="text-primary-dark/60 text-xl">‹</span>
+                            <div class="text-center">
+                                <p id="date-main-label" class="font-serif font-bold text-xl text-[#1D1D1F]">2026.05.30</p>
+                                <p id="date-week-label" class="text-xs text-[#86868B] mt-1">周六</p>
+                            </div>
+                            <span class="text-primary-dark/60 text-xl">›</span>
+                        </div>
+                    </div>
+
+                    <div class="mb-6">
+                        <div class="flex items-center justify-between mb-2 px-1">
+                            <p class="text-[11px] font-bold text-[#86868B] uppercase tracking-widest">这束花背后的故事</p>
+                            <p id="story-count" class="text-[11px] text-[#86868B]">0 / 300</p>
+                        </div>
+                        <textarea id="wizard-story-input" maxlength="300" class="w-full bg-white border border-gray-200 rounded-2xl p-4 text-sm outline-none focus:border-primary transition-colors resize-none h-24 shadow-inner" placeholder="比如那天在哪里、谁送的、为什么记得它..."></textarea>
+                    </div>
+
+                    <button id="wizard-next-button" onclick="goToStep(2)" class="w-full py-3.5 rounded-full bg-[#1D1D1F] text-white font-bold shadow-lg disabled:bg-[#1D1D1F]/25 disabled:shadow-none disabled:cursor-not-allowed" disabled>下一步</button>
+                </div>
+
+                <div id="step-2" class="absolute w-full px-6 left-full transition-all duration-500 opacity-0">
+                    <h2 class="text-2xl font-serif font-bold mb-2 text-center">选择生成的风格</h2>
+                    <p id="style-helper-text" class="text-xs text-center text-gray-400 mb-8">AI 将基于照片为你定制专属插画</p>
+
+                    <div class="flex flex-col gap-4 mb-8">
+                        <button data-style="magnet" onclick="selectVisualStyle('magnet')" class="style-option selected flex items-center p-3 bg-primary-light border-2 border-primary rounded-2xl cursor-pointer transition-all text-left">
+                            <div class="w-16 h-16 bg-white rounded-xl flex items-center justify-center text-2xl mr-4 shadow-sm">🧊</div>
+                            <div class="flex-1">
+                                <h4 class="font-bold text-[#1D1D1F] text-sm">立体冰箱贴</h4>
+                                <p class="text-[10px] text-gray-500 mt-1">保留轮廓，带有精美白边和投影</p>
+                            </div>
+                            <div class="style-check w-5 h-5 rounded-full bg-primary flex items-center justify-center text-white text-xs">✓</div>
+                        </button>
+                        <button data-style="watercolor" onclick="selectVisualStyle('watercolor')" class="style-option flex items-center p-3 bg-white border border-gray-200 rounded-2xl cursor-pointer transition-all text-left">
+                            <div class="w-16 h-16 bg-gray-50 rounded-xl flex items-center justify-center text-2xl mr-4">🎨</div>
+                            <div class="flex-1">
+                                <h4 class="font-bold text-[#1D1D1F] text-sm">治愈水彩</h4>
+                                <p class="text-[10px] text-gray-500 mt-1">柔和治愈，像画册里的一页</p>
+                            </div>
+                            <div class="style-check hidden w-5 h-5 rounded-full bg-primary items-center justify-center text-white text-xs">✓</div>
+                        </button>
+                        <button data-style="polaroid" onclick="selectVisualStyle('polaroid')" class="style-option flex items-center p-3 bg-white border border-gray-200 rounded-2xl cursor-pointer transition-all text-left">
+                            <div class="w-16 h-16 bg-gray-50 rounded-xl flex items-center justify-center text-2xl mr-4">📸</div>
+                            <div class="flex-1">
+                                <h4 class="font-bold text-[#1D1D1F] text-sm">复古拍立得</h4>
+                                <p class="text-[10px] text-gray-500 mt-1">胶片滤镜，像被夹在藤蔓上的回忆</p>
+                            </div>
+                            <div class="style-check hidden w-5 h-5 rounded-full bg-primary items-center justify-center text-white text-xs">✓</div>
+                        </button>
+                        <button data-style="original" onclick="selectVisualStyle('original')" class="style-option flex items-center p-3 bg-white border border-gray-200 rounded-2xl cursor-pointer transition-all text-left">
+                            <div class="w-16 h-16 bg-gray-50 rounded-xl flex items-center justify-center text-2xl mr-4">🖼️</div>
+                            <div class="flex-1">
+                                <h4 class="font-bold text-[#1D1D1F] text-sm">保留原图</h4>
+                                <p class="text-[10px] text-gray-500 mt-1">不调用 AI，直接保存真实照片</p>
+                            </div>
+                            <div class="style-check hidden w-5 h-5 rounded-full bg-primary items-center justify-center text-white text-xs">✓</div>
+                        </button>
+                    </div>
+                    
+                    <div class="flex gap-3">
+                        <button onclick="goToStep(1)" class="w-1/3 py-3.5 rounded-full bg-gray-200 text-gray-600 font-bold">返回</button>
+                        <button id="generate-button" onclick="startLoading()" class="w-2/3 py-3.5 rounded-full bg-primary text-white font-bold shadow-glow">开始生成魔法</button>
+                    </div>
+                </div>
+
+                <div id="step-3" class="absolute inset-0 flex flex-col items-center justify-center bg-[#F5F5F7] transition-all duration-500 opacity-0 z-10 hidden">
+                    <div class="w-16 h-16 rounded-full border-4 border-primary-light border-t-primary animate-spin mb-8"></div>
+                    <h3 id="loading-text" class="text-lg font-serif font-bold text-primary-dark tracking-wider transition-opacity duration-300">正在提取花香...</h3>
+                </div>
+
+                <div id="step-4" class="absolute w-full px-6 left-full transition-all duration-500 opacity-0 pb-10">
+                    <div class="bg-white rounded-3xl p-4 shadow-sm border border-gray-100 mb-6 mt-4">
+                        <img id="generated-preview" src="https://images.unsplash.com/photo-1526047932273-341f2a7631f9?auto=format&fit=crop&q=80&w=600" class="w-full h-48 object-cover rounded-2xl mb-3" alt="Generated">
+                        
+                        <div class="px-2 mb-6 relative">
+                            <span class="absolute -top-1 -left-1 text-2xl text-primary opacity-30 font-serif leading-none">"</span>
+                            <p id="generated-comment" class="text-sm text-gray-600 font-serif italic text-center relative z-10 leading-relaxed px-2">
+                                这一抹柔粉，驱散了初秋的凉意。很懂浪漫的人，送了很温柔的花。
+                            </p>
+                        </div>
+                        
+                        <div class="text-center mb-4">
+                            <h3 id="generated-title" class="text-xl font-serif font-bold text-[#1D1D1F] mb-2">夏末的悸动</h3>
+                        </div>
+                        
+                        <div class="bg-primary-light/20 border border-primary-light/50 rounded-xl p-3.5 mb-5 mx-2">
+                            <div id="generated-tags" class="flex flex-col gap-2.5"></div>
+                        </div>
+
+                        <div id="wizard-story-container" class="hidden border-t border-gray-100 pt-5 mt-2">
+                            <h4 class="text-[10px] font-bold text-[#86868B] mb-3 uppercase tracking-widest flex items-center gap-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
+                                这一天的故事
+                            </h4>
+                            <p id="wizard-story-display" class="text-xs text-[#1D1D1F] leading-relaxed bg-gray-50/50 p-3 rounded-xl border border-gray-50"></p>
+                        </div>
+                    </div>
+                    
+                    <button onclick="saveGeneratedRecord()" class="w-full py-3.5 rounded-full bg-[#1D1D1F] text-white font-bold shadow-lg">保存至花历</button>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== 鲜花详情 (模态框 Overlay) ==================== -->
+    <div id="flower-detail-overlay" class="modal-overlay fixed inset-0 z-50 flex flex-col justify-end">
+        <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" onclick="closeFlowerDetail()"></div>
+        
+        <div class="modal-content relative w-full max-w-lg mx-auto h-[85vh] bg-[#F5F5F7] rounded-t-3xl shadow-2xl flex flex-col overflow-hidden">
+            <div class="w-full h-12 flex justify-center items-center shrink-0 cursor-pointer" onclick="closeFlowerDetail()">
+                <div class="w-12 h-1.5 bg-gray-300 rounded-full"></div>
+            </div>
+            
+            <div class="flex-grow relative px-6 pb-8 overflow-y-auto hide-scrollbar">
+                
+                <div class="bg-white rounded-3xl p-4 shadow-sm border border-gray-100 mb-6">
+                    <img id="detail-image" src="" class="w-full h-64 object-cover rounded-2xl mb-3 shadow-sm" alt="Flower">
+                    
+                    <div class="px-2 mb-6 relative">
+                        <span class="absolute -top-1 -left-1 text-2xl text-primary opacity-30 font-serif leading-none">"</span>
+                        <p id="detail-comment" class="text-sm text-gray-600 font-serif italic text-center relative z-10 leading-relaxed px-2"></p>
+                    </div>
+
+                    <div class="text-center mb-4">
+                        <h3 id="detail-title" class="text-xl font-serif font-bold text-[#1D1D1F] mb-2"></h3>
+                        <div id="detail-meta" class="hidden items-center justify-center gap-2 text-[11px] text-[#86868B] font-medium">
+                            <span id="detail-date"></span>
+                            <span class="w-1 h-1 rounded-full bg-primary-light"></span>
+                            <span id="detail-action" class="text-primary-dark"></span>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-primary-light/20 border border-primary-light/50 rounded-xl p-3.5 mb-2 mx-2" id="detail-tags-wrapper">
+                        <div id="detail-tags-container" class="flex flex-col gap-2.5"></div>
+                    </div>
+                </div>
+                
+                <div>
+                    <h4 class="text-xs font-bold text-[#86868B] mb-3 uppercase tracking-widest flex items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
+                        这一天的故事
+                    </h4>
+                    <p id="detail-story" class="text-sm text-[#1D1D1F] leading-relaxed bg-white p-4 rounded-2xl border border-gray-100 shadow-sm min-h-[5rem]"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 交互逻辑脚本 -->
+    <script>
+        const MS_PER_DAY = 24 * 60 * 60 * 1000;
+        const today = startOfLocalDay(new Date());
+        const appState = {
+            actionType: 'received',
+            selectedDate: new Date(today),
+            visualStyle: 'magnet',
+            photoDataUrl: '',
+            filters: { action: 'all', year: '2026' },
+            floraPage: 0,
+            generatedRecord: null
+        };
+
+        const loadingTexts = [
+            "正在提取花香...",
+            "植物学家正在鉴定中...",
+            "AI 园丁正在修剪枝叶...",
+            "正在为你写下这束花的注脚..."
+        ];
+
+        const floraPages = [
+            [
+                { icon: '🌹', name: '红玫瑰', meaning: '热恋与唯一', count: 8 },
+                { icon: '🌻', name: '向日葵', meaning: '沉默但忠诚的爱', count: 4 },
+                { icon: '🌿', name: '洋桔梗', meaning: '真诚不变的爱', count: 3 }
+            ],
+            [
+                { icon: '🤍', name: '白百合', meaning: '心心相印', count: 2 },
+                { icon: '💐', name: '小苍兰', meaning: '幸福的到来', count: 2 },
+                { icon: '🌼', name: '满天星', meaning: '甘愿做配角', count: 2 }
+            ],
+            [
+                { icon: '🌷', name: '郁金香', meaning: '温柔告白', count: 1 },
+                { icon: '🌙', name: '尤加利叶', meaning: '恩赐与回忆', count: 1 },
+                { icon: '🌸', name: '粉玫瑰', meaning: '偏爱与心动', count: 1 }
+            ]
+        ];
+
+        function startOfLocalDay(date) {
+            return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+        }
+
+        function formatDateKey(date) {
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+
+        function formatDateDot(date) {
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            return `${y}.${m}.${d}`;
+        }
+
+        function weekLabel(date) {
+            return ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][date.getDay()];
+        }
+
+        function updateDateLabels() {
+            document.getElementById('date-main-label').innerText = formatDateDot(appState.selectedDate);
+            document.getElementById('date-week-label').innerText = weekLabel(appState.selectedDate);
+            const picker = document.getElementById('date-picker-input');
+            if (picker) {
+                picker.max = formatDateKey(today);
+                picker.value = formatDateKey(appState.selectedDate);
+            }
+        }
+
+        function switchTab(tab) {
+            const timeline = document.getElementById('view-timeline');
+            const stats = document.getElementById('view-stats');
+            const navTimeline = document.getElementById('nav-timeline');
+            const navStats = document.getElementById('nav-stats');
+
+            if (tab === 'timeline') {
+                timeline.classList.add('active');
+                stats.classList.remove('active');
+                navTimeline.classList.remove('text-[#86868B]');
+                navTimeline.classList.add('text-primary');
+                navStats.classList.remove('text-primary');
+                navStats.classList.add('text-[#86868B]');
+                setTimeout(initScrollAnimations, 100);
+            } else {
+                stats.classList.add('active');
+                timeline.classList.remove('active');
+                navStats.classList.remove('text-[#86868B]');
+                navStats.classList.add('text-primary');
+                navTimeline.classList.remove('text-primary');
+                navTimeline.classList.add('text-[#86868B]');
+            }
+        }
+
+        function jumpToTimeline() {
+            setTimelineFilter('action', 'all');
+            setTimelineFilter('year', '2026', { toggle: false });
+            switchTab('timeline');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function jumpToRecord(recordId) {
+            setTimelineFilter('action', 'all');
+            setTimelineFilter('year', '2026', { toggle: false });
+            switchTab('timeline');
+            window.setTimeout(() => {
+                const record = document.getElementById(recordId);
+                if (!record) return;
+                const targetTop = Math.max(
+                    0,
+                    record.getBoundingClientRect().top + window.scrollY - ((window.innerHeight - record.offsetHeight) / 2)
+                );
+                window.scrollTo({ top: targetTop, behavior: 'smooth' });
+                window.setTimeout(() => {
+                    if (Math.abs(window.scrollY - targetTop) > 24) {
+                        window.scrollTo({ top: targetTop, behavior: 'auto' });
+                    }
+                }, 520);
+                const card = record.querySelector('.glass-card');
+                if (card) {
+                    card.classList.add('record-focus');
+                    window.setTimeout(() => card.classList.remove('record-focus'), 1800);
+                }
+            }, 160);
+        }
+
+        function toggleYearFilter(year) {
+            const button = document.querySelector(`[data-filter-group="year"][data-filter-value="${year}"]`);
+            const shouldClear = button && button.classList.contains('active');
+            appState.filters.year = shouldClear ? 'all' : year;
+            document.querySelectorAll('[data-filter-group="year"]').forEach(item => {
+                const selected = !shouldClear && item.dataset.filterValue === year;
+                item.classList.toggle('active', selected);
+                item.classList.toggle('text-[#86868B]', !selected);
+                item.classList.toggle('bg-white/70', !selected);
+                item.classList.toggle('border-white/80', !selected);
+            });
+            applyTimelineFilters();
+        }
+
+        function openWizard() {
+            resetWizard();
+            document.getElementById('wizard-overlay').classList.add('active');
+            goToStep(1);
+        }
+        
+        function closeWizard() {
+            document.getElementById('wizard-overlay').classList.remove('active');
+        }
+
+        function resetWizard() {
+            appState.actionType = 'received';
+            appState.selectedDate = new Date(today);
+            appState.visualStyle = 'magnet';
+            appState.photoDataUrl = '';
+            appState.generatedRecord = null;
+            document.getElementById('flower-file-input').value = '';
+            document.getElementById('wizard-story-input').value = '';
+            document.getElementById('story-count').innerText = '0 / 300';
+            document.getElementById('upload-preview').classList.add('hidden');
+            document.getElementById('upload-change-chip').classList.add('hidden');
+            document.getElementById('upload-placeholder').classList.remove('hidden');
+            updateNextButton();
+            updateDateLabels();
+            selectActionType('received');
+            selectVisualStyle('magnet');
+        }
+
+        function goToStep(step) {
+            const steps = [1, 2, 3, 4];
+            steps.forEach(s => {
+                const el = document.getElementById(`step-${s}`);
+                if (!el) return;
+                if (s < step) {
+                    el.style.left = '-100%';
+                    el.style.opacity = '0';
+                } else if (s === step) {
+                    el.style.left = '0';
+                    el.style.opacity = '1';
+                    el.classList.remove('hidden');
+                } else {
+                    el.style.left = '100%';
+                    el.style.opacity = '0';
+                }
+            });
+        }
+
+        function selectActionType(type) {
+            appState.actionType = type;
+            document.querySelectorAll('.action-choice').forEach(button => {
+                const selected = button.dataset.actionChoice === type;
+                button.classList.toggle('bg-primary', selected);
+                button.classList.toggle('text-white', selected);
+                button.classList.toggle('shadow-md', selected);
+                button.classList.toggle('shadow-primary/30', selected);
+                button.classList.toggle('bg-white', !selected);
+                button.classList.toggle('text-gray-500', !selected);
+                button.classList.toggle('border', !selected);
+                button.classList.toggle('border-gray-200', !selected);
+            });
+        }
+
+        function selectVisualStyle(style) {
+            appState.visualStyle = style;
+            document.querySelectorAll('.style-option').forEach(option => {
+                const selected = option.dataset.style === style;
+                option.classList.toggle('selected', selected);
+                option.classList.toggle('bg-white', !selected);
+                option.classList.toggle('border-gray-200', !selected);
+                option.classList.toggle('border-primary', selected);
+                option.classList.toggle('border-2', selected);
+                const check = option.querySelector('.style-check');
+                if (check) {
+                    check.classList.toggle('hidden', !selected);
+                    check.classList.toggle('flex', selected);
+                }
+            });
+            const generateButton = document.getElementById('generate-button');
+            const helperText = document.getElementById('style-helper-text');
+            if (generateButton) {
+                generateButton.innerText = style === 'original' ? '使用原图记录' : '开始生成魔法';
+            }
+            if (helperText) {
+                helperText.innerText = style === 'original'
+                    ? '保留真实照片，不调用 AI 生成'
+                    : 'AI 将基于照片为你定制专属插画';
+            }
+        }
+
+        function updateNextButton() {
+            document.getElementById('wizard-next-button').disabled = !appState.photoDataUrl;
+        }
+
+        function bindUploadInput() {
+            const input = document.getElementById('flower-file-input');
+            input.addEventListener('change', event => {
+                const file = event.target.files && event.target.files[0];
+                if (!file) return;
+                if (!file.type.startsWith('image/')) {
+                    showToast('请选择一张鲜花照片。');
+                    return;
+                }
+                const reader = new FileReader();
+                reader.onload = () => {
+                    appState.photoDataUrl = reader.result;
+                    const preview = document.getElementById('upload-preview');
+                    preview.src = appState.photoDataUrl;
+                    preview.classList.remove('hidden');
+                    document.getElementById('upload-placeholder').classList.add('hidden');
+                    document.getElementById('upload-change-chip').classList.remove('hidden');
+                    updateNextButton();
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function bindStoryCounter() {
+            const textarea = document.getElementById('wizard-story-input');
+            textarea.addEventListener('input', () => {
+                document.getElementById('story-count').innerText = `${textarea.value.length} / 300`;
+            });
+        }
+
+        function bindDateDrag() {
+            const card = document.getElementById('date-drag-card');
+            let startX = null;
+            let startDate = null;
+            let didDrag = false;
+            let futureToastShown = false;
+
+            card.addEventListener('pointerdown', event => {
+                startX = event.clientX;
+                startDate = new Date(appState.selectedDate);
+                didDrag = false;
+                futureToastShown = false;
+                card.classList.add('dragging');
+                card.setPointerCapture(event.pointerId);
+            });
+
+            card.addEventListener('pointermove', event => {
+                if (startX === null) return;
+                const delta = event.clientX - startX;
+                if (Math.abs(delta) > 8) didDrag = true;
+                const offsetDays = Math.round(delta / 46);
+                const nextDate = new Date(startDate.getTime() + offsetDays * MS_PER_DAY);
+
+                if (nextDate > today) {
+                    appState.selectedDate = new Date(today);
+                    if (!futureToastShown) {
+                        showToast('花还没有开到那一天。');
+                        futureToastShown = true;
+                    }
+                } else {
+                    appState.selectedDate = startOfLocalDay(nextDate);
+                }
+                updateDateLabels();
+            });
+
+            const endDrag = event => {
+                if (startX === null) return;
+                startX = null;
+                startDate = null;
+                card.classList.remove('dragging');
+                card.dataset.wasDragged = didDrag ? 'true' : 'false';
+                try { card.releasePointerCapture(event.pointerId); } catch (error) {}
+            };
+
+            card.addEventListener('pointerup', endDrag);
+            card.addEventListener('pointercancel', endDrag);
+        }
+
+        function bindDatePicker() {
+            const trigger = document.getElementById('date-picker-trigger');
+            const picker = document.getElementById('date-picker-input');
+            const card = document.getElementById('date-drag-card');
+            if (!trigger || !picker) return;
+            picker.max = formatDateKey(today);
+            picker.value = formatDateKey(appState.selectedDate);
+
+            const openPicker = () => {
+                if (typeof picker.showPicker === 'function') {
+                    picker.showPicker();
+                } else {
+                    picker.click();
+                }
+            };
+
+            trigger.addEventListener('click', openPicker);
+            if (card) {
+                card.addEventListener('click', () => {
+                    if (card.dataset.wasDragged === 'true') {
+                        card.dataset.wasDragged = 'false';
+                        return;
+                    }
+                    openPicker();
+                });
+            }
+            picker.addEventListener('change', () => {
+                if (!picker.value) return;
+                const selected = startOfLocalDay(new Date(`${picker.value}T00:00:00`));
+                if (selected > today) {
+                    appState.selectedDate = new Date(today);
+                    showToast('花还没有开到那一天。');
+                } else {
+                    appState.selectedDate = selected;
+                }
+                updateDateLabels();
+            });
+        }
+
+        function setRecordSide(record, side) {
+            const marker = record.querySelector(':scope > .absolute');
+            const slots = Array.from(record.children).filter(child => child !== marker);
+            const cardSlot = slots.find(slot => slot.querySelector('.glass-card'));
+            const spacerSlot = slots.find(slot => !slot.querySelector('.glass-card'));
+            if (!marker || !cardSlot || !spacerSlot) return;
+
+            record.classList.toggle('left', side === 'left');
+            record.classList.toggle('right', side === 'right');
+            if (side === 'left') {
+                cardSlot.className = 'w-1/2 pr-4 flex justify-end';
+                spacerSlot.className = 'w-1/2 pl-4';
+                record.append(marker, cardSlot, spacerSlot);
+            } else {
+                spacerSlot.className = 'w-1/2 pr-4';
+                cardSlot.className = 'w-1/2 pl-4 flex justify-start';
+                record.append(marker, spacerSlot, cardSlot);
+            }
+        }
+
+        function setTimelineFilter(group, value, options = {}) {
+            const shouldToggle = options.toggle !== false;
+            const currentButton = document.querySelector(`[data-filter-group="${group}"][data-filter-value="${value}"]`);
+            const alreadySelected = currentButton && currentButton.classList.contains('active');
+            const nextValue = group === 'year' && shouldToggle && alreadySelected ? 'all' : value;
+            appState.filters[group] = nextValue;
+            document.querySelectorAll(`[data-filter-group="${group}"]`).forEach(button => {
+                const selected = button.dataset.filterValue === nextValue;
+                button.classList.toggle('active', selected);
+                button.classList.toggle('text-[#86868B]', !selected);
+                button.classList.toggle('bg-white/70', !selected && group === 'year');
+                button.classList.toggle('border-white/80', !selected && group === 'year');
+            });
+            applyTimelineFilters();
+        }
+
+        function bindFilters() {
+            document.querySelectorAll('[data-filter-group]').forEach(button => {
+                if (button.dataset.filterGroup === 'year') return;
+                button.addEventListener('click', () => {
+                    setTimelineFilter(button.dataset.filterGroup, button.dataset.filterValue);
+                });
+            });
+        }
+
+        function applyTimelineFilters() {
+            const visibleRecords = [];
+            document.querySelectorAll('.timeline-record').forEach(record => {
+                const actionMatch = appState.filters.action === 'all' || record.dataset.action === appState.filters.action;
+                const yearMatch = appState.filters.year === 'all' || record.dataset.year === appState.filters.year;
+                const visible = actionMatch && yearMatch;
+                record.classList.toggle('hidden', !visible);
+                if (visible) visibleRecords.push(record);
+            });
+            visibleRecords.forEach((record, index) => {
+                setRecordSide(record, index % 2 === 0 ? 'left' : 'right');
+            });
+            document.getElementById('timeline-empty').classList.toggle('hidden', visibleRecords.length > 0);
+            setTimeout(initScrollAnimations, 80);
+        }
+        
+        function startLoading() {
+            if (!appState.photoDataUrl) {
+                showToast('先选一张花束照片吧。');
+                return;
+            }
+            if (appState.visualStyle === 'original') {
+                renderGeneratedResult();
+                goToStep(4);
+                return;
+            }
+            goToStep(3); 
+            const textEl = document.getElementById('loading-text');
+            let currentIndex = 0;
+            
+            const interval = setInterval(() => {
+                textEl.style.opacity = '0';
+                setTimeout(() => {
+                    currentIndex = (currentIndex + 1) % loadingTexts.length;
+                    textEl.innerText = loadingTexts[currentIndex];
+                    textEl.style.opacity = '1';
+                }, 300);
+            }, 1200);
+
+            setTimeout(() => {
+                clearInterval(interval);
+                document.getElementById('step-3').classList.add('hidden');
+                renderGeneratedResult();
+                goToStep(4);
+            }, 3200);
+        }
+
+        function renderGeneratedResult() {
+            const storyInput = document.getElementById('wizard-story-input').value.trim();
+            const styleName = {
+                original: '原图',
+                magnet: '冰箱贴',
+                watercolor: '水彩',
+                polaroid: '拍立得'
+            }[appState.visualStyle];
+            const isOriginal = appState.visualStyle === 'original';
+            const title = isOriginal
+                ? (appState.actionType === 'received' ? '收到的原图' : '送出的原图')
+                : (appState.actionType === 'received' ? '有花开了' : '送给她的花');
+            const comment = isOriginal
+                ? `保留这束花最真实的样子，花语留给故事慢慢补上。`
+                : (appState.actionType === 'received'
+                    ? `这束花不算高调，但很会把心意说得刚刚好。`
+                    : `这束${styleName}感的花，像一次认真准备过的温柔偷袭。`);
+            const tags = isOriginal
+                ? ['📷 原图：不进行 AI 识别，保留真实照片']
+                : [
+                    '🌹 红玫瑰：热烈、坚定，把喜欢说得很认真',
+                    '🌿 洋桔梗：真诚不变，温柔里带着一点克制'
+                ];
+
+            appState.generatedRecord = {
+                title,
+                image: appState.photoDataUrl,
+                actionType: appState.actionType,
+                date: new Date(appState.selectedDate),
+                tags,
+                comment,
+                story: storyInput
+            };
+
+            document.getElementById('generated-preview').src = appState.photoDataUrl;
+            document.getElementById('generated-title').innerText = title;
+            document.getElementById('generated-comment').innerText = `“${comment}”`;
+            const tagsContainer = document.getElementById('generated-tags');
+            tagsContainer.innerHTML = '';
+            tags.forEach(tag => {
+                const parts = tag.split(/[:：]/);
+                const row = document.createElement('div');
+                row.className = 'flex items-start text-xs';
+                row.innerHTML = `
+                    <span class="text-primary-dark font-bold mr-2 whitespace-nowrap">${parts[0]}：</span>
+                    <span class="text-[#5E6C79] leading-relaxed">${parts[1]}</span>
+                `;
+                tagsContainer.appendChild(row);
+            });
+            
+            const storyContainer = document.getElementById('wizard-story-container');
+            const storyDisplay = document.getElementById('wizard-story-display');
+            if (storyInput) {
+                storyDisplay.innerText = storyInput;
+                storyContainer.classList.remove('hidden');
+            } else {
+                storyContainer.classList.add('hidden');
+            }
+        }
+
+        function parseFlowerTag(tag) {
+            const parts = tag.split(/[:：]/);
+            const rawName = (parts[0] || '').trim();
+            const meaning = (parts.slice(1).join('：') || '').trim();
+            const iconMatch = rawName.match(/^(\S+)\s*(.*)$/);
+            return {
+                icon: iconMatch ? iconMatch[1] : '💐',
+                name: iconMatch ? iconMatch[2] || rawName : rawName,
+                meaning
+            };
+        }
+
+        function flowerMiniMarkup(tag) {
+            const flower = parseFlowerTag(tag);
+            return `
+                <div class="flower-mini ml-2">
+                    <span class="flower-mini-icon">${flower.icon}</span>
+                    <span class="flower-mini-text">
+                        <span class="flower-mini-name">${flower.name || '花材'}</span>
+                        <span class="flower-mini-meaning">${flower.meaning || '心意'}</span>
+                    </span>
+                </div>
+            `;
+        }
+
+        function flowerStripMarkup(tags) {
+            return `
+                <div class="flower-strip">
+                    ${tags.slice(0, 3).map(tag => {
+                        const flower = parseFlowerTag(tag);
+                        return `<span class="flower-chip"><span>${flower.icon}</span><span class="flower-chip-name">${flower.name || '花材'}</span></span>`;
+                    }).join('')}
+                </div>
+            `;
+        }
+
+        function saveGeneratedRecord() {
+            if (!appState.generatedRecord) return;
+            prependTimelineRecord(appState.generatedRecord);
+            closeWizard();
+            showToast('这束花已经长进花历里了。');
+            jumpToTimeline();
+        }
+
+        function prependTimelineRecord(record) {
+            const container = document.getElementById('timeline-container');
+            const item = document.createElement('div');
+            const isLeft = document.querySelectorAll('.timeline-record').length % 2 === 0;
+            const actionLabel = record.actionType === 'received' ? '收到' : '送出';
+            const actionColor = record.actionType === 'received' ? 'bg-primary/90' : 'bg-[#86868B]/80';
+            const dateText = `${String(record.date.getMonth() + 1).padStart(2, '0')}.${String(record.date.getDate()).padStart(2, '0')}`;
+            const flowerMarkup = flowerStripMarkup(record.tags);
+            item.className = `timeline-record flex items-center w-full relative reveal-card ${isLeft ? 'left' : 'right'} cursor-pointer active:scale-[0.98] transition-transform`;
+            item.dataset.action = record.actionType;
+            item.dataset.year = String(record.date.getFullYear());
+            item.innerHTML = `
+                <div class="absolute left-1/2 -translate-x-1/2 w-3 h-3 rounded-full bg-background border-2 border-primary shadow-glow z-20"></div>
+                ${isLeft ? '<div class="w-1/2 pr-4 flex justify-end">' : '<div class="w-1/2 pr-4"></div><div class="w-1/2 pl-4 flex justify-start">'}
+                    <div class="w-full max-w-[200px] glass-card bg-surface rounded-3xl p-3 shadow-glass border border-white/80 transition-transform duration-300 hover:-translate-y-1">
+                        <div class="relative aspect-[4/5] overflow-hidden rounded-2xl mb-3 shadow-sm bg-gray-100">
+                            <img src="${record.image}" alt="${record.title}" class="object-cover w-full h-full">
+                            <div class="absolute top-2 left-2 bg-white/90 backdrop-blur-sm px-2 py-0.5 rounded-full text-[10px] font-bold text-primary-dark shadow-sm">${dateText}</div>
+                            <div class="absolute top-2 right-2 ${actionColor} text-white px-2 py-0.5 rounded-full text-[10px] shadow-sm">${actionLabel}</div>
+                        </div>
+                        <div class="px-1.5 pb-1.5 pt-1">
+                            <div class="flex items-center justify-between mb-2">
+                                <h3 class="text-base font-serif font-bold text-[#1D1D1F] truncate">${record.title}</h3>
+                            </div>
+                            <p class="text-xs text-[#86868B] font-serif italic leading-relaxed">“${record.comment}”</p>
+                            ${flowerMarkup}
+                        </div>
+                    </div>
+                </div>
+                ${isLeft ? '<div class="w-1/2 pl-4"></div>' : ''}
+            `;
+            item.addEventListener('click', () => {
+                openFlowerDetail(record.title, record.tags, `“${record.comment}”`, record.image, record.story, {
+                    date: `${formatDateDot(record.date)} · ${weekLabel(record.date)}`,
+                    action: actionLabel
+                });
+            });
+            container.insertBefore(item, container.firstElementChild);
+            applyTimelineFilters();
+        }
+
+        function openFlowerDetail(title, tags, comment, imageSrc, story, meta = {}) {
+            document.getElementById('detail-title').innerText = title;
+            document.getElementById('detail-comment').innerText = comment;
+            document.getElementById('detail-image').src = imageSrc;
+            const detailMeta = document.getElementById('detail-meta');
+            if (meta.date || meta.action) {
+                document.getElementById('detail-date').innerText = meta.date || '';
+                document.getElementById('detail-action').innerText = meta.action || '';
+                detailMeta.classList.remove('hidden');
+                detailMeta.classList.add('flex');
+            } else {
+                detailMeta.classList.add('hidden');
+                detailMeta.classList.remove('flex');
+            }
+            
+            const tagsContainer = document.getElementById('detail-tags-container');
+            const tagsWrapper = document.getElementById('detail-tags-wrapper');
+            tagsContainer.innerHTML = ''; 
+            
+            if (tags && tags.length > 0) {
+                tagsWrapper.style.display = 'block';
+                tags.forEach(tag => {
+                    const parts = tag.split(/[:：]/);
+                    const name = parts[0] ? parts[0].trim() : '';
+                    const meaning = parts[1] ? parts[1].trim() : '';
+                    
+                    const row = document.createElement('div');
+                    row.className = 'flex items-start text-xs';
+                    row.innerHTML = `
+                        <span class="text-primary-dark font-bold mr-2 whitespace-nowrap">${name}：</span>
+                        <span class="text-[#5E6C79] leading-relaxed">${meaning}</span>
+                    `;
+                    tagsContainer.appendChild(row);
+                });
+            } else {
+                tagsWrapper.style.display = 'none';
+            }
+            
+            const storyEl = document.getElementById('detail-story');
+            if (story) {
+                storyEl.innerText = story;
+                storyEl.classList.remove('text-gray-400', 'italic');
+            } else {
+                storyEl.innerText = "那天忘了写下故事，但花香依然记得。";
+                storyEl.classList.add('text-gray-400', 'italic');
+            }
+
+            document.getElementById('flower-detail-overlay').classList.add('active');
+        }
+
+        function closeFlowerDetail() {
+            document.getElementById('flower-detail-overlay').classList.remove('active');
+        }
+
+        function renderFloraBook() {
+            const list = document.getElementById('flora-book-list');
+            const dots = document.getElementById('flora-book-dots');
+            list.innerHTML = '';
+            dots.innerHTML = '';
+
+            floraPages[appState.floraPage].forEach(item => {
+                const row = document.createElement('button');
+                row.className = 'flora-row';
+                row.innerHTML = `
+                    <span class="flora-icon">${item.icon}</span>
+                    <span class="flora-copy">
+                        <span class="flora-name">${item.name}</span>
+                        <span class="flora-meaning">${item.meaning}</span>
+                    </span>
+                    <span class="flora-count">x${item.count}</span>
+                `;
+                list.appendChild(row);
+            });
+
+            floraPages.forEach((_, index) => {
+                const dot = document.createElement('button');
+                dot.onclick = () => {
+                    appState.floraPage = index;
+                    renderFloraBook();
+                };
+                dot.className = index === appState.floraPage
+                    ? 'w-4 h-1.5 rounded-full bg-primary transition-all'
+                    : 'w-1.5 h-1.5 rounded-full bg-[#D2A5B3]/30 transition-all hover:bg-primary-light';
+                dots.appendChild(dot);
+            });
+        }
+
+        function showToast(message) {
+            let toast = document.getElementById('app-toast');
+            if (!toast) {
+                toast = document.createElement('div');
+                toast.id = 'app-toast';
+                toast.className = 'toast fixed left-1/2 bottom-24 z-[70] bg-[#1D1D1F]/90 text-white text-xs font-bold px-4 py-2.5 rounded-full shadow-xl backdrop-blur';
+                document.body.appendChild(toast);
+            }
+            toast.innerText = message;
+            toast.classList.add('active');
+            clearTimeout(showToast.timer);
+            showToast.timer = setTimeout(() => toast.classList.remove('active'), 2200);
+        }
+
+        let observer;
+        let scrollHandler;
+        function initScrollAnimations() {
+            const vine = document.getElementById('vine');
+            if (scrollHandler) {
+                window.removeEventListener('scroll', scrollHandler);
+            }
+            scrollHandler = () => {
+                const timelineView = document.getElementById('view-timeline');
+                if (!timelineView.classList.contains('active')) return;
+                
+                const scrollTop = window.scrollY;
+                const docHeight = document.body.scrollHeight;
+                const winHeight = window.innerHeight;
+                
+                if (docHeight > winHeight) {
+                    const scrollPercent = scrollTop / (docHeight - winHeight);
+                    const scaleValue = Math.min(Math.max(scrollPercent + 0.1, 0), 1);
+                    vine.style.transform = `scaleY(${scaleValue})`;
+                }
+            };
+            
+            window.addEventListener('scroll', scrollHandler);
+            scrollHandler();
+
+            const cards = document.querySelectorAll('#view-timeline .reveal-card:not(.hidden)');
+            if (observer) observer.disconnect();
+            observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('active');
+                        observer.unobserve(entry.target);
+                    }
+                });
+            }, {
+                threshold: 0.1,
+                rootMargin: "0px 0px -50px 0px"
+            });
+            
+            cards.forEach(card => {
+                card.classList.remove('active');
+                observer.observe(card);
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            updateDateLabels();
+            bindUploadInput();
+            bindStoryCounter();
+            bindDateDrag();
+            bindDatePicker();
+            bindFilters();
+            renderFloraBook();
+            applyTimelineFilters();
+            initScrollAnimations();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,2359 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Flora Story - 专属花历</title>
+    
+    <link href="./flora-tailwind.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@500;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body { -webkit-font-smoothing: antialiased; }
+        .glass-card {
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+        }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        .reveal-card {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: all 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .reveal-card.left { transform: translate(-20px, 30px); }
+        .reveal-card.right { transform: translate(20px, 30px); }
+        .reveal-card.active {
+            opacity: 1;
+            transform: translate(0, 0);
+        }
+
+        .view-section {
+            display: none !important;
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+        .view-section.active {
+            display: block !important;
+            opacity: 1;
+        }
+        #view-stats.view-section.active {
+            display: flex !important;
+        }
+
+        .modal-overlay {
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+        .modal-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .modal-content {
+            transform: translateY(100%);
+            transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .modal-overlay.active .modal-content {
+            transform: translateY(0);
+        }
+        .filter-pill {
+            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .filter-pill.active {
+            background: #D2A5B3;
+            color: white;
+            box-shadow: 0 8px 25px -5px rgba(210, 165, 179, 0.4);
+        }
+        .filter-pill.year-pill.active {
+            background: rgba(255, 255, 255, 0.92);
+            color: #A67684;
+            border-color: rgba(210, 165, 179, 0.78);
+            box-shadow: 0 8px 20px -14px rgba(166, 118, 132, 0.48);
+        }
+        .quiet-empty-action {
+            color: #86868B;
+            transition: color 0.28s ease, transform 0.28s ease;
+        }
+        .quiet-empty-action:hover {
+            color: #BE7F92;
+        }
+        .date-card {
+            touch-action: pan-y;
+            user-select: none;
+        }
+        .date-card.dragging {
+            cursor: grabbing;
+            transform: scale(0.98);
+        }
+        .style-option.selected {
+            background: #F6EBED;
+            border-color: #D2A5B3;
+            box-shadow: 0 12px 30px -18px rgba(210, 165, 179, 0.65);
+        }
+        .toast {
+            opacity: 0;
+            transform: translate(-50%, 12px);
+            pointer-events: none;
+            transition: all 0.28s ease;
+        }
+        .toast.active {
+            opacity: 1;
+            transform: translate(-50%, 0);
+        }
+        .record-focus {
+            box-shadow: 0 0 0 3px rgba(210, 165, 179, 0.28), 0 18px 42px -22px rgba(166, 118, 132, 0.8);
+        }
+        .flower-mini {
+            min-width: 0;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 6px 3px 4px;
+            border-radius: 999px;
+            background: linear-gradient(135deg, rgba(246, 235, 237, 0.92), rgba(255, 255, 255, 0.76));
+            border: 1px solid rgba(210, 165, 179, 0.18);
+            color: #A67684;
+        }
+        .flower-mini-icon {
+            width: 16px;
+            height: 16px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 999px;
+            background: white;
+            font-size: 10px;
+            box-shadow: 0 3px 8px rgba(166, 118, 132, 0.08);
+            flex: 0 0 auto;
+        }
+        .flower-mini-text {
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            line-height: 1.05;
+        }
+        .flower-mini-name {
+            max-width: 58px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-size: 10px;
+            font-weight: 700;
+        }
+        .flower-mini-meaning {
+            max-width: 58px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-size: 8px;
+            color: rgba(134, 104, 115, 0.72);
+        }
+        .flower-strip {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            min-height: 12px;
+            margin-top: 7px;
+            overflow: hidden;
+            flex-wrap: nowrap;
+            color: #A67684;
+            white-space: nowrap;
+        }
+        .flower-chip {
+            min-width: 0;
+            flex: 0 1 auto;
+            display: inline-grid;
+            grid-template-columns: 10px minmax(0, auto);
+            align-items: center;
+            column-gap: 3px;
+            padding: 0;
+            color: inherit;
+            font-size: 9px;
+            font-weight: 700;
+            line-height: 1;
+        }
+        .flower-chip-icon {
+            width: 10px;
+            height: 10px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 9px;
+            line-height: 1;
+        }
+        .flower-chip-separator {
+            width: 2px;
+            height: 2px;
+            border-radius: 999px;
+            background: rgba(166, 118, 132, 0.35);
+            flex: 0 0 auto;
+        }
+        .flower-chip-name {
+            min-width: 0;
+            max-width: 58px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            line-height: 1;
+        }
+        .timeline-card {
+            position: relative;
+            width: min(100%, 172px);
+            border-radius: 22px;
+            padding: 10px;
+        }
+        .record-compressed {
+            margin-top: -104px;
+        }
+        .detail-actions {
+            display: flex;
+            gap: 10px;
+            margin: 16px 0 0;
+            padding: 6px;
+            border-radius: 18px;
+            background: #F5F5F7;
+            border: 1px solid rgba(29, 29, 31, 0.06);
+        }
+        .detail-action-button {
+            flex: 1 1 0;
+            white-space: nowrap;
+            border-radius: 14px;
+            padding: 12px 12px;
+            background: #FFFFFF;
+            border: 1px solid rgba(29, 29, 31, 0.1);
+            color: #1D1D1F;
+            font-size: 11px;
+            font-weight: 800;
+            line-height: 1;
+            box-shadow: 0 1px 2px rgba(29, 29, 31, 0.04);
+            transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+        }
+        .detail-action-button:hover {
+            background: #FAFAFB;
+            border-color: rgba(29, 29, 31, 0.2);
+            transform: translateY(-1px);
+        }
+        .detail-action-button.delete {
+            background: #1D1D1F;
+            border-color: #1D1D1F;
+            color: #FFFFFF;
+        }
+        .detail-action-button.delete:hover {
+            background: #000000;
+            border-color: #000000;
+            color: white;
+        }
+        .timeline-comment {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .flora-page-button {
+            width: 26px;
+            height: 26px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 999px;
+            color: #A67684;
+            background: rgba(255, 255, 255, 0.72);
+            border: 1px solid rgba(210, 165, 179, 0.18);
+            transition: all 0.22s ease;
+        }
+        .flora-page-button:hover {
+            background: #D2A5B3;
+            color: white;
+        }
+        .flora-page-button:disabled {
+            opacity: 0.35;
+            pointer-events: none;
+        }
+        .flora-dot-button {
+            width: 22px;
+            height: 26px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .flora-dot-button span {
+            display: block;
+            width: 6px;
+            height: 6px;
+            border-radius: 999px;
+            background: rgba(210, 165, 179, 0.32);
+            transition: all 0.22s ease;
+        }
+        .flora-dot-button.active span {
+            width: 16px;
+            background: #D2A5B3;
+        }
+        .bouquet-cluster {
+            position: relative;
+            width: min(100%, 390px);
+            min-height: 178px;
+            margin: 0 auto;
+            overflow: visible;
+            isolation: isolate;
+        }
+        .bouquet-item {
+            position: absolute;
+            left: var(--x);
+            top: var(--y);
+            width: clamp(70px, 20vw, 96px);
+            transform: translate(-50%, -50%) rotate(var(--rotate));
+            transform-origin: 50% 86%;
+            transition: transform 0.28s ease, filter 0.28s ease;
+        }
+        .bouquet-item:hover {
+            transform: translate(-50%, -56%) rotate(var(--rotate)) scale(1.05);
+            filter: saturate(1.04);
+            z-index: 60 !important;
+        }
+        .bouquet-image {
+            width: 100%;
+            height: clamp(112px, 31vw, 148px);
+            object-fit: contain;
+            border-radius: 13px;
+            border: 4px solid white;
+            background: #F8F6F4;
+            box-shadow: 0 18px 42px -22px rgba(29, 29, 31, 0.46);
+        }
+        .bouquet-more {
+            position: absolute;
+            right: 4%;
+            bottom: 12px;
+            z-index: 70;
+            min-width: 44px;
+            height: 32px;
+            padding: 0 10px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.88);
+            border: 1px solid rgba(210, 165, 179, 0.24);
+            color: #A67684;
+            font-size: 12px;
+            font-weight: 800;
+            box-shadow: 0 12px 28px -20px rgba(29, 29, 31, 0.34);
+            backdrop-filter: blur(12px);
+        }
+        .flora-row {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 14px;
+            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.88);
+            border: 1px solid rgba(255, 255, 255, 0.9);
+            box-shadow: 0 12px 28px -20px rgba(29, 29, 31, 0.28);
+            transition: all 0.22s ease;
+            text-align: left;
+        }
+        .flora-row:active {
+            transform: scale(0.99);
+        }
+        .flora-icon {
+            width: 40px;
+            height: 40px;
+            flex: 0 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 16px;
+            background: linear-gradient(135deg, #F6EBED, #FFFFFF);
+            box-shadow: inset 0 0 0 1px rgba(210, 165, 179, 0.14);
+        }
+        .flora-copy {
+            min-width: 0;
+            flex: 1;
+            display: flex;
+            align-items: baseline;
+            gap: 7px;
+        }
+        .flora-name {
+            flex: 0 0 auto;
+            font-size: 14px;
+            font-weight: 700;
+            color: #1D1D1F;
+            line-height: 1.15;
+        }
+        .flora-meaning {
+            min-width: 0;
+            font-size: 12px;
+            color: #86868B;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .flora-count {
+            flex: 0 0 auto;
+            padding: 4px 7px;
+            border-radius: 999px;
+            background: #F6EBED;
+            color: #A67684;
+            font-size: 11px;
+            font-weight: 800;
+        }
+        .auth-trigger {
+            position: fixed;
+            top: 14px;
+            right: max(14px, calc((100vw - 512px) / 2 + 14px));
+            z-index: 45;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.88);
+            border: 1px solid rgba(255, 255, 255, 0.9);
+            color: #A67684;
+            box-shadow: 0 14px 34px -24px rgba(29, 29, 31, 0.34);
+            backdrop-filter: blur(16px);
+        }
+        .auth-panel {
+            position: fixed;
+            top: 54px;
+            right: max(14px, calc((100vw - 512px) / 2 + 14px));
+            z-index: 45;
+            width: min(calc(100% - 32px), 448px);
+            border-radius: 24px;
+            background: rgba(255, 255, 255, 0.88);
+            border: 1px solid rgba(255, 255, 255, 0.9);
+            box-shadow: 0 18px 44px -28px rgba(29, 29, 31, 0.34);
+            backdrop-filter: blur(18px);
+        }
+    </style>
+</head>
+<body class="bg-background min-h-screen text-[#1D1D1F] overflow-x-hidden pb-24">
+
+    <button id="auth-trigger" type="button" onclick="toggleAuthPanel()" class="auth-trigger px-3 py-2 text-xs font-bold">
+        <span>Login</span>
+        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+    </button>
+
+    <div id="auth-panel" class="auth-panel px-4 py-3 hidden">
+        <div id="auth-signed-out" class="flex items-center gap-2">
+            <input id="auth-email-input" type="email" inputmode="email" autocomplete="email" placeholder="邮箱" class="min-w-0 flex-1 rounded-full border border-primary-light/70 bg-white px-3 py-2 text-xs outline-none focus:border-primary">
+            <input id="auth-code-input" type="text" inputmode="numeric" maxlength="6" placeholder="验证码" class="hidden w-24 rounded-full border border-primary-light/70 bg-white px-3 py-2 text-xs outline-none focus:border-primary">
+            <button id="auth-send-button" type="button" onclick="requestLoginCode()" class="rounded-full bg-[#1D1D1F] px-3 py-2 text-xs font-bold text-white">获取</button>
+            <button id="auth-login-button" type="button" onclick="verifyLoginCode()" class="hidden rounded-full bg-primary px-3 py-2 text-xs font-bold text-white">登录</button>
+        </div>
+        <div id="auth-signed-in" class="hidden items-center justify-between gap-3">
+            <p class="min-w-0 truncate text-xs font-bold text-[#1D1D1F]">已登录 <span id="auth-user-email" class="text-primary-dark"></span></p>
+            <button type="button" onclick="logoutUser()" class="rounded-full bg-white px-3 py-2 text-xs font-bold text-[#86868B] border border-white/80">退出</button>
+        </div>
+    </div>
+
+    <!-- ==================== 视图 1: 花历 (时间线) ==================== -->
+    <div id="view-timeline" class="view-section active pt-12 px-4 max-w-lg mx-auto relative">
+        
+        <!-- 头部区 -->
+        <div class="text-center mb-8 reveal-card active">
+            <h1 class="text-3xl font-serif font-bold tracking-wider mb-2 text-[#1D1D1F]">Flora Story</h1>
+            <p class="text-sm text-[#86868B]">我们的浪漫图鉴</p>
+        </div>
+
+        <!-- 筛选器区域 -->
+        <div class="space-y-3 mb-10 reveal-card active px-1">
+            <div class="glass-card bg-surface border border-white/80 shadow-glass rounded-full p-1 flex gap-1">
+                <button data-filter-group="action" data-filter-value="all" class="filter-pill active flex-1 py-2 rounded-full text-xs font-bold">全部记录</button>
+                <button data-filter-group="action" data-filter-value="received" class="filter-pill flex-1 py-2 rounded-full text-xs font-bold text-[#86868B]">收到</button>
+                <button data-filter-group="action" data-filter-value="sent" class="filter-pill flex-1 py-2 rounded-full text-xs font-bold text-[#86868B]">送出</button>
+            </div>
+            <div class="flex justify-center gap-2">
+                <button onclick="toggleYearFilter('2026')" data-filter-group="year" data-filter-value="2026" class="filter-pill year-pill active px-6 py-2 rounded-full text-xs font-bold border border-primary/70 bg-white/90 text-primary-dark">2026</button>
+            </div>
+        </div>
+
+        <!-- 藤蔓背景轴 -->
+        <div class="absolute left-1/2 top-64 bottom-0 w-[2px] -translate-x-1/2 bg-[#E5E0D8]/60 border-l border-dashed border-[#A67684]/20 z-0"></div>
+        <div id="vine" class="absolute left-1/2 top-64 bottom-0 w-[3px] -translate-x-1/2 bg-gradient-to-b from-primary to-primary-light origin-top scale-y-0 z-0"></div>
+
+        <!-- 卡片列表 -->
+        <div class="relative z-10 flex flex-col gap-3 pb-10" id="timeline-container">
+            <div id="timeline-empty" class="hidden glass-card bg-surface border border-white/80 rounded-3xl px-6 py-9 text-center shadow-glass">
+                <button type="button" onclick="openWizard()" class="group w-full flex flex-col items-center active:scale-[0.99] transition-transform">
+                    <span class="text-sm font-serif text-[#86868B]">这一段时间还没有花开。</span>
+                    <span class="mt-2 text-[11px] font-bold tracking-[0.18em] uppercase text-primary-dark/70 group-hover:text-primary-dark transition-colors">种下一棵花</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== 视图 2: 档案 ==================== -->
+    <div id="view-stats" class="view-section pt-12 px-4 max-w-lg mx-auto min-h-screen flex flex-col pb-28">
+        
+        <div class="text-center mb-8">
+            <h1 class="text-3xl font-serif font-bold tracking-wider mb-2 text-[#1D1D1F]">花房</h1>
+            <p class="text-xs text-[#86868B] uppercase tracking-[0.2em]">你的专属数字花园</p>
+        </div>
+
+        <!-- 专属大花束 -->
+        <div class="relative w-full flex flex-col items-center justify-center mb-12">
+            <div class="relative w-full min-h-[210px] flex items-center justify-center mt-4 px-3" aria-label="专属花束合集">
+                <div id="bouquet-strip" class="bouquet-cluster">
+                    <button type="button" onclick="openWizard()" class="quiet-empty-action col-span-4 text-center text-sm font-serif active:scale-[0.98]">还没有花束，先种下一朵吧。</button>
+                </div>
+            </div>
+            
+            <div class="mt-8 flex flex-col items-center">
+                <span class="text-[10px] text-primary-dark font-bold tracking-[0.25em] uppercase">The Ultimate Bouquet</span>
+                <div class="w-12 h-px bg-primary-light mt-2"></div>
+            </div>
+        </div>
+
+        <!-- Bento Grid 成就 -->
+        <div class="grid grid-cols-2 gap-3 mb-10 px-1">
+            <button onclick="jumpToTimeline()" class="col-span-2 text-left glass-card bg-surface rounded-[24px] p-5 border border-white/80 shadow-glass flex items-center justify-between transition-transform hover:scale-[1.02] active:scale-[0.99]">
+                <div>
+                    <p class="text-[11px] text-[#86868B] font-bold mb-1.5 uppercase tracking-widest">Milestone</p>
+                    <h3 id="record-count-label" class="text-xl font-serif font-bold text-[#1D1D1F]">累计记录 0 束花</h3>
+                </div>
+                <div class="w-12 h-12 bg-gradient-to-br from-primary-light to-white rounded-full flex items-center justify-center text-2xl shadow-sm border border-white">🌸</div>
+            </button>
+
+            <div class="glass-card bg-surface rounded-[24px] p-4 border border-white/80 shadow-glass transition-transform hover:-translate-y-1">
+                <div class="w-8 h-8 bg-primary-light/50 rounded-full flex items-center justify-center mb-3">💌</div>
+                <p class="text-[10px] text-[#86868B] font-bold mb-1 uppercase tracking-widest">最常表达的心意</p>
+                <h4 id="top-meaning-label" class="text-sm font-serif font-bold text-[#1D1D1F] mb-1">等待第一束花</h4>
+                <p id="top-meaning-count" class="text-xs text-primary-dark font-medium">出现 0 次</p>
+            </div>
+
+            <div class="glass-card bg-surface rounded-[24px] p-4 border border-white/80 shadow-glass transition-transform hover:-translate-y-1">
+                <div class="w-8 h-8 bg-[#E5E0D8]/50 rounded-full flex items-center justify-center mb-3">🌿</div>
+                <p class="text-[10px] text-[#86868B] font-bold mb-1 uppercase tracking-widest">最偏爱送出</p>
+                <h4 id="sent-favorite-label" class="text-sm font-serif font-bold text-[#1D1D1F] mb-1">暂无送出</h4>
+                <p id="sent-favorite-count" class="text-xs text-[#86868B] font-medium">共送出 0 次</p>
+            </div>
+
+            <button id="longest-story-card" class="text-left glass-card bg-surface rounded-[24px] p-4 border border-white/80 shadow-glass transition-transform hover:-translate-y-1 active:scale-[0.98]">
+                <div class="w-8 h-8 bg-[#F0F2F5] rounded-full flex items-center justify-center mb-3">✍️</div>
+                <p class="text-[10px] text-[#86868B] font-bold mb-1 uppercase tracking-widest">纸短情长</p>
+                <h4 id="longest-story-length" class="text-sm font-serif font-bold text-[#1D1D1F] mb-1">还没有故事</h4>
+                <p id="longest-story-title" class="text-xs text-[#86868B] font-medium truncate">保存后会出现在这里</p>
+            </button>
+
+            <button id="latest-record-card" class="text-left glass-card bg-surface rounded-[24px] p-4 border border-white/80 shadow-glass transition-transform hover:-translate-y-1 active:scale-[0.98]">
+                <div class="w-8 h-8 bg-[#1D1D1F]/5 rounded-full flex items-center justify-center mb-3">🌙</div>
+                <p class="text-[10px] text-[#86868B] font-bold mb-1 uppercase tracking-widest">最近一束</p>
+                <h4 id="latest-record-date" class="text-sm font-serif font-bold text-[#1D1D1F] mb-1">暂无记录</h4>
+                <p id="latest-record-title" class="text-xs text-[#86868B] font-medium truncate">第一束花会在这里发光</p>
+            </button>
+        </div>
+
+        <!-- 解锁的花卉图鉴 & 分页指示器 -->
+        <div class="px-2 mb-8">
+            <h3 class="text-sm font-serif font-bold text-[#1D1D1F] mb-4 px-1 border-l-2 border-primary pl-2">已解锁图鉴</h3>
+            <div id="flora-book-list" class="flex flex-col gap-2.5 mb-4"></div>
+            
+            <!-- 分页指示器 (Dots) -->
+            <div id="flora-book-dots" class="flex justify-end gap-1.5 px-2"></div>
+        </div>
+        
+        <!-- 新增：诗句名言模块 -->
+        <div class="mt-2 px-4 py-6 relative glass-card bg-surface rounded-3xl border border-white/80 shadow-glass mb-8">
+            <span class="absolute top-2 left-4 text-4xl text-primary opacity-20 font-serif leading-none">"</span>
+            <p id="romantic-quote-text" class="text-sm text-[#5E6C79] font-serif italic text-center relative z-10 leading-relaxed px-4 tracking-wide">
+                云想衣裳花想容。
+            </p>
+            <p id="romantic-quote-source" class="text-[10px] text-right text-[#86868B] mt-3 font-medium uppercase tracking-widest">—— 李白《清平调》</p>
+        </div>
+
+    </div>
+
+    <!-- ==================== 底部固定导航 & FAB ==================== -->
+    <div class="fixed bottom-0 left-0 w-full h-20 bg-background/90 backdrop-blur-xl border-t border-white/50 z-40 flex items-center justify-around px-8">
+        <button onclick="switchTab('timeline')" id="nav-timeline" class="flex flex-col items-center gap-1.5 text-primary transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+            <span class="text-[10px] font-bold">花历</span>
+        </button>
+
+        <div class="relative -top-6">
+            <button onclick="openWizard()" class="bg-primary text-white p-4 rounded-full shadow-glow flex items-center justify-center hover:scale-105 active:scale-95 transition-transform duration-200">
+                <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+            </button>
+        </div>
+
+        <button onclick="switchTab('stats')" id="nav-stats" class="flex flex-col items-center gap-1.5 text-[#86868B] transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><path d="M7 7h10"></path><path d="M7 12h10"></path><path d="M7 17h10"></path></svg>
+            <span class="text-[10px] font-bold">花房</span>
+        </button>
+    </div>
+
+    <!-- ==================== 魔法记录向导 (模态框 Overlay) ==================== -->
+    <div id="wizard-overlay" class="modal-overlay fixed inset-0 z-50 flex flex-col justify-end">
+        <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" onclick="closeWizard()"></div>
+        
+        <div class="modal-content relative w-full max-w-lg mx-auto h-[85vh] bg-[#F5F5F7] rounded-t-3xl shadow-2xl flex flex-col overflow-hidden">
+            <div class="w-full h-12 flex justify-center items-center shrink-0 cursor-pointer" onclick="closeWizard()">
+                <div class="w-12 h-1.5 bg-gray-300 rounded-full"></div>
+            </div>
+
+            <div class="flex-grow relative px-6 pb-8 overflow-y-auto hide-scrollbar">
+                
+                <div id="step-1" class="absolute w-full px-6 left-0 transition-all duration-500">
+                    <h2 class="text-2xl font-serif font-bold mb-1 text-center">种下一棵花</h2>
+                    <p class="text-xs text-center text-[#86868B] mb-6">把这束花，种进你们的时间线</p>
+                    
+                    <input id="flower-file-input" type="file" accept="image/*" class="hidden">
+                    <label for="flower-file-input" id="upload-zone" class="relative bg-white rounded-3xl p-4 shadow-sm border border-dashed border-primary-light mb-5 flex flex-col items-center justify-center h-48 cursor-pointer overflow-hidden transition-transform active:scale-[0.99]">
+                        <img id="upload-preview" src="" alt="鲜花预览" class="hidden absolute inset-0 w-full h-full object-cover">
+                        <div id="upload-placeholder" class="relative z-10 flex flex-col items-center">
+                            <div class="w-12 h-12 bg-primary-light text-primary rounded-full flex items-center justify-center mb-3">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                            </div>
+                            <p class="text-sm font-medium text-gray-500">点击上传鲜花照片</p>
+                        </div>
+                        <div id="upload-change-chip" class="hidden absolute bottom-3 right-3 z-10 bg-white/90 backdrop-blur px-3 py-1 rounded-full text-[10px] font-bold text-primary-dark shadow-sm">重新选择</div>
+                    </label>
+
+                    <div class="flex gap-3 mb-5">
+                        <button data-action-choice="received" onclick="selectActionType('received')" class="action-choice flex-1 py-3 rounded-2xl bg-primary text-white font-medium shadow-md shadow-primary/30 transition-all">收到花</button>
+                        <button data-action-choice="sent" onclick="selectActionType('sent')" class="action-choice flex-1 py-3 rounded-2xl bg-white text-gray-500 font-medium border border-gray-200 transition-all">送出花</button>
+                    </div>
+
+                    <div class="mb-5">
+                        <div class="flex items-center justify-between mb-2 px-1">
+                            <p class="text-[11px] font-bold text-[#86868B] uppercase tracking-widest">花开日期</p>
+                            <button id="date-picker-trigger" type="button" class="text-[11px] font-bold text-primary-dark">选择日期</button>
+                            <input id="date-picker-input" type="date" class="sr-only" aria-label="选择花开日期">
+                        </div>
+                        <div id="date-drag-card" class="date-card glass-card bg-white/80 border border-white rounded-3xl shadow-glass px-4 py-4 flex items-center justify-between cursor-grab transition-transform">
+                            <span class="text-primary-dark/60 text-xl">‹</span>
+                            <div class="text-center">
+                                <p id="date-main-label" class="font-serif font-bold text-xl text-[#1D1D1F]">2026.05.30</p>
+                                <p id="date-week-label" class="text-xs text-[#86868B] mt-1">周六</p>
+                            </div>
+                            <span class="text-primary-dark/60 text-xl">›</span>
+                        </div>
+                    </div>
+
+                    <div class="mb-6">
+                        <div class="flex items-center justify-between mb-2 px-1">
+                            <p class="text-[11px] font-bold text-[#86868B] uppercase tracking-widest">这束花背后的故事</p>
+                            <p id="story-count" class="text-[11px] text-[#86868B]">0 / 300</p>
+                        </div>
+                        <textarea id="wizard-story-input" maxlength="300" class="w-full bg-white border border-gray-200 rounded-2xl p-4 text-sm outline-none focus:border-primary transition-colors resize-none h-24 shadow-inner" placeholder="比如那天在哪里、谁送的、为什么记得它..."></textarea>
+                    </div>
+
+                    <button id="wizard-next-button" onclick="goToStep(2)" class="w-full py-3.5 rounded-full bg-[#1D1D1F] text-white font-bold shadow-lg disabled:bg-[#1D1D1F]/25 disabled:shadow-none disabled:cursor-not-allowed" disabled>下一步</button>
+                </div>
+
+                <div id="step-2" class="absolute w-full px-6 left-full transition-all duration-500 opacity-0">
+                    <h2 class="text-2xl font-serif font-bold mb-2 text-center">选择生成的风格</h2>
+                    <p id="style-helper-text" class="text-xs text-center text-gray-400 mb-8">AI 将基于照片为你定制专属插画</p>
+
+                    <div class="flex flex-col gap-4 mb-8">
+                        <button data-style="watercolor" onclick="selectVisualStyle('watercolor')" class="style-option selected flex items-center p-3 bg-primary-light border-2 border-primary rounded-2xl cursor-pointer transition-all text-left">
+                            <div class="w-16 h-16 bg-white rounded-xl flex items-center justify-center text-2xl mr-4 shadow-sm">🎨</div>
+                            <div class="flex-1">
+                                <h4 class="font-bold text-[#1D1D1F] text-sm">治愈水彩</h4>
+                                <p class="text-[10px] text-gray-500 mt-1">清透手绘感，像植物图鉴的一页</p>
+                            </div>
+                            <div class="style-check w-5 h-5 rounded-full bg-primary flex items-center justify-center text-white text-xs">✓</div>
+                        </button>
+                        <button data-style="magnet" onclick="selectVisualStyle('magnet')" class="style-option flex items-center p-3 bg-white border border-gray-200 rounded-2xl cursor-pointer transition-all text-left">
+                            <div class="w-16 h-16 bg-gray-50 rounded-xl flex items-center justify-center text-2xl mr-4">🧊</div>
+                            <div class="flex-1">
+                                <h4 class="font-bold text-[#1D1D1F] text-sm">艺术冰箱贴</h4>
+                                <p class="text-[10px] text-gray-500 mt-1">轻浮雕贴纸感，柔和白边与浅投影</p>
+                            </div>
+                            <div class="style-check hidden w-5 h-5 rounded-full bg-primary items-center justify-center text-white text-xs">✓</div>
+                        </button>
+                        <button data-style="polaroid" onclick="selectVisualStyle('polaroid')" class="style-option flex items-center p-3 bg-white border border-gray-200 rounded-2xl cursor-pointer transition-all text-left">
+                            <div class="w-16 h-16 bg-gray-50 rounded-xl flex items-center justify-center text-2xl mr-4">📸</div>
+                            <div class="flex-1">
+                                <h4 class="font-bold text-[#1D1D1F] text-sm">胶片拍立得</h4>
+                                <p class="text-[10px] text-gray-500 mt-1">柔和电影色调，像被收藏的纪念照</p>
+                            </div>
+                            <div class="style-check hidden w-5 h-5 rounded-full bg-primary items-center justify-center text-white text-xs">✓</div>
+                        </button>
+                        <button data-style="original" onclick="selectVisualStyle('original')" class="style-option flex items-center p-3 bg-white border border-gray-200 rounded-2xl cursor-pointer transition-all text-left">
+                            <div class="w-16 h-16 bg-gray-50 rounded-xl flex items-center justify-center text-2xl mr-4">🖼️</div>
+                            <div class="flex-1">
+                                <h4 class="font-bold text-[#1D1D1F] text-sm">保留原图</h4>
+                                <p class="text-[10px] text-gray-500 mt-1">保留真实照片，只识别花材和文案</p>
+                            </div>
+                            <div class="style-check hidden w-5 h-5 rounded-full bg-primary items-center justify-center text-white text-xs">✓</div>
+                        </button>
+                    </div>
+                    
+                    <div class="flex gap-3">
+                        <button onclick="goToStep(1)" class="w-1/3 py-3.5 rounded-full bg-gray-200 text-gray-600 font-bold">返回</button>
+                        <button id="generate-button" onclick="startLoading()" class="w-2/3 py-3.5 rounded-full bg-primary text-white font-bold shadow-glow">开始生成魔法</button>
+                    </div>
+                </div>
+
+                <div id="step-3" class="absolute inset-0 flex flex-col items-center justify-center bg-[#F5F5F7] transition-all duration-500 opacity-0 z-10 hidden">
+                    <div class="w-16 h-16 rounded-full border-4 border-primary-light border-t-primary animate-spin mb-8"></div>
+                    <h3 id="loading-text" class="text-lg font-serif font-bold text-primary-dark tracking-wider transition-opacity duration-300">正在提取花香...</h3>
+                </div>
+
+                <div id="step-4" class="absolute w-full px-6 left-full transition-all duration-500 opacity-0 pb-10">
+                    <div class="bg-white rounded-3xl p-4 shadow-sm border border-gray-100 mb-6 mt-4">
+                        <div class="relative mx-auto mb-3 aspect-[3/4] w-full max-w-[380px] max-h-[58vh] overflow-hidden rounded-2xl bg-[#F8F6F4] shadow-sm">
+                            <img id="generated-preview" src="https://images.unsplash.com/photo-1526047932273-341f2a7631f9?auto=format&fit=crop&q=80&w=600" class="w-full h-full object-contain" alt="Generated">
+                            <button id="peek-original-button" type="button" class="absolute left-2 top-2 rounded-full bg-white/90 px-3 py-1 text-[10px] font-bold text-primary-dark shadow-sm backdrop-blur">按住看原图</button>
+                            <span id="generated-style-label" class="absolute right-2 top-2 rounded-full bg-[#1D1D1F]/70 px-2.5 py-1 text-[10px] font-bold text-white shadow-sm">治愈水彩</span>
+                        </div>
+                        
+                        <div class="px-2 mb-6 relative">
+                            <span class="absolute -top-1 -left-1 text-2xl text-primary opacity-30 font-serif leading-none">"</span>
+                            <p id="generated-comment" class="text-sm text-gray-600 font-serif italic text-center relative z-10 leading-relaxed px-2">
+                                这一抹柔粉，驱散了初秋的凉意。很懂浪漫的人，送了很温柔的花。
+                            </p>
+                        </div>
+                        
+                        <div class="text-center mb-4">
+                            <h3 id="generated-title" class="text-xl font-serif font-bold text-[#1D1D1F] mb-2">夏末的悸动</h3>
+                        </div>
+                        
+                        <div class="bg-primary-light/20 border border-primary-light/50 rounded-xl p-3.5 mb-5 mx-2">
+                            <div id="generated-tags" class="flex flex-col gap-2.5"></div>
+                        </div>
+
+                        <div id="wizard-story-container" class="hidden border-t border-gray-100 pt-5 mt-2">
+                            <h4 class="text-[10px] font-bold text-[#86868B] mb-3 uppercase tracking-widest flex items-center gap-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
+                                这一天的故事
+                            </h4>
+                            <p id="wizard-story-display" class="text-xs text-[#1D1D1F] leading-relaxed bg-gray-50/50 p-3 rounded-xl border border-gray-50"></p>
+                        </div>
+                    </div>
+                    
+                    <div class="flex gap-3">
+                        <button onclick="retryGeneration()" class="w-1/3 py-3.5 rounded-full bg-gray-200 text-gray-600 font-bold">重新生成</button>
+                        <button onclick="saveGeneratedRecord()" class="w-2/3 py-3.5 rounded-full bg-[#1D1D1F] text-white font-bold shadow-lg">保存至花历</button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== 鲜花详情 (模态框 Overlay) ==================== -->
+    <div id="flower-detail-overlay" class="modal-overlay fixed inset-0 z-50 flex flex-col justify-end">
+        <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" onclick="closeFlowerDetail()"></div>
+        
+        <div class="modal-content relative w-full max-w-lg mx-auto h-[85vh] bg-[#F5F5F7] rounded-t-3xl shadow-2xl flex flex-col overflow-hidden">
+            <div class="w-full h-12 flex justify-center items-center shrink-0 cursor-pointer" onclick="closeFlowerDetail()">
+                <div class="w-12 h-1.5 bg-gray-300 rounded-full"></div>
+            </div>
+            
+            <div class="flex-grow relative px-6 pb-8 overflow-y-auto hide-scrollbar">
+                
+                <div class="bg-white rounded-3xl p-4 shadow-sm border border-gray-100 mb-6">
+                    <div class="relative mx-auto aspect-[3/4] w-full max-w-[400px] max-h-[62vh] overflow-hidden rounded-2xl mb-3 bg-[#F8F6F4] shadow-sm">
+                        <img id="detail-image" src="" class="w-full h-full object-contain" alt="Flower">
+                        <span id="detail-style" class="absolute right-2 top-2 rounded-full bg-[#1D1D1F]/70 px-2.5 py-1 text-[10px] font-bold text-white shadow-sm">治愈水彩</span>
+                    </div>
+                    
+                    <div class="px-2 mb-6 relative">
+                        <span class="absolute -top-1 -left-1 text-2xl text-primary opacity-30 font-serif leading-none">"</span>
+                        <p id="detail-comment" class="text-sm text-gray-600 font-serif italic text-center relative z-10 leading-relaxed px-2"></p>
+                    </div>
+
+                    <div class="text-center mb-4">
+                        <h3 id="detail-title" class="text-xl font-serif font-bold text-[#1D1D1F] mb-2"></h3>
+                        <div id="detail-meta" class="hidden items-center justify-center gap-2 text-[11px] text-[#86868B] font-medium">
+                            <span id="detail-date"></span>
+                            <span class="w-1 h-1 rounded-full bg-primary-light"></span>
+                            <span id="detail-action" class="text-primary-dark"></span>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-primary-light/20 border border-primary-light/50 rounded-xl p-3.5 mb-2 mx-2" id="detail-tags-wrapper">
+                        <div id="detail-tags-container" class="flex flex-col gap-2.5"></div>
+                    </div>
+                </div>
+                
+                <div>
+                    <h4 class="text-xs font-bold text-[#86868B] mb-3 uppercase tracking-widest flex items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
+                        这一天的故事
+                    </h4>
+                    <p id="detail-story" class="text-sm text-[#1D1D1F] leading-relaxed bg-white p-4 rounded-2xl border border-gray-100 shadow-sm min-h-[5rem]"></p>
+                    <div class="detail-actions">
+                        <button type="button" onclick="downloadDetailCard(event)" class="detail-action-button">下载卡片</button>
+                        <button type="button" onclick="deleteDetailRecord(event)" class="detail-action-button delete">删除卡片</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 交互逻辑脚本 -->
+    <script>
+        const MS_PER_DAY = 24 * 60 * 60 * 1000;
+        const today = startOfLocalDay(new Date());
+        const appState = {
+            actionType: 'received',
+            selectedDate: new Date(today),
+            visualStyle: 'watercolor',
+            photoDataUrl: '',
+            photoFile: null,
+            uploadedImageUrl: '',
+            filters: { action: 'all', year: '2026' },
+            floraPage: 0,
+            generatedRecord: null,
+            lastFailedRecord: null,
+            detailRecord: null,
+            currentUser: null,
+            records: []
+        };
+
+        const loadingTexts = [
+            "正在提取花香...",
+            "植物学家正在鉴定中...",
+            "AI 园丁正在修剪枝叶...",
+            "正在为你写下这束花的注脚..."
+        ];
+
+        let floraPages = [[]];
+
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function flowerIconForName(name) {
+            const text = String(name || '');
+            if (text.includes('玫瑰')) return '🌹';
+            if (text.includes('向日葵')) return '🌻';
+            if (text.includes('百合')) return '🤍';
+            if (text.includes('小苍兰')) return '💐';
+            if (text.includes('满天星')) return '🌼';
+            if (text.includes('桔梗')) return '🌿';
+            if (text.includes('尤加利')) return '🌙';
+            if (text.includes('郁金香')) return '🌷';
+            return '🌸';
+        }
+
+        function cleanFlowerName(name) {
+            return String(name || '花材')
+                .replace(/[（(][^（）()]*[）)]/g, '')
+                .replace(/[，,、/／].*$/g, '')
+                .trim() || '花材';
+        }
+
+        function cleanFlowerDetail(flower) {
+            return {
+                ...flower,
+                name: cleanFlowerName(flower && flower.name)
+            };
+        }
+
+        function flowerDetailsToTags(flowers) {
+            return (flowers || []).slice(0, 5).map(rawFlower => {
+                const flower = cleanFlowerDetail(rawFlower || {});
+                const name = flower.name || '花材';
+                const meaning = flower.meaning || '一束被认真记住的花';
+                return `${flowerIconForName(name)} ${name}：${meaning}`;
+            });
+        }
+
+        function styleLabel(style) {
+            return {
+                watercolor: '治愈水彩',
+                magnet: '艺术冰箱贴',
+                polaroid: '胶片拍立得',
+                original: '原图'
+            }[style] || '生成图';
+        }
+
+        function styleTag(style, generatedImageUrl, originalImageUrl) {
+            const label = styleLabel(style);
+            return generatedImageUrl === originalImageUrl && style !== 'original'
+                ? `${label} · 原图`
+                : label;
+        }
+
+        function recordIdForDom(record) {
+            return record.id ? `record-${record.id}` : `record-local-${record.localId}`;
+        }
+
+        function ensureLocalId(record) {
+            if (!record.localId) {
+                record.localId = `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+            }
+            return record;
+        }
+
+        const romanticQuoteLibrary = [
+            { text: '云想衣裳花想容。', source: '李白《清平调》' },
+            { text: '人面桃花相映红。', source: '崔护《题都城南庄》' },
+            { text: '只缘感君一回顾。', source: '乐府《古相思曲》' },
+            { text: '玲珑骰子安红豆。', source: '温庭筠《南歌子》' },
+            { text: '春心莫共花争发。', source: '李商隐《无题》' },
+            { text: '相见时难别亦难。', source: '李商隐《无题》' },
+            { text: '此情可待成追忆。', source: '李商隐《锦瑟》' },
+            { text: '愿君多采撷。', source: '王维《相思》' },
+            { text: '花开堪折直须折。', source: '杜秋娘《金缕衣》' },
+            { text: '有花堪折直须折。', source: '杜秋娘《金缕衣》' },
+            { text: '花径不曾缘客扫。', source: '杜甫《客至》' },
+            { text: '暗香浮动月黄昏。', source: '林逋《山园小梅》' },
+            { text: '疏影横斜水清浅。', source: '林逋《山园小梅》' },
+            { text: '一枝红杏出墙来。', source: '叶绍翁《游园不值》' },
+            { text: '乱花渐欲迷人眼。', source: '白居易《钱塘湖春行》' },
+            { text: '花间一壶酒。', source: '李白《月下独酌》' },
+            { text: '落花人独立。', source: '晏几道《临江仙》' },
+            { text: '桃之夭夭，灼灼其华。', source: '《诗经·周南·桃夭》' },
+            { text: '采采卷耳，不盈顷筐。', source: '《诗经·周南·卷耳》' },
+            { text: '盈盈一水间，脉脉不得语。', source: '《古诗十九首》' }
+        ];
+
+        function pickRandomItem(items) {
+            return items[Math.floor(Math.random() * items.length)];
+        }
+
+        function safeFileName(value, fallback = 'flora-story') {
+            return String(value || fallback).replace(/[\\/:*?"<>|]/g, '-').slice(0, 32) || fallback;
+        }
+
+        function loadDrawableImage(src) {
+            return new Promise(resolve => {
+                const image = new Image();
+                image.crossOrigin = 'anonymous';
+                image.onload = () => resolve(image);
+                image.onerror = () => resolve(null);
+                image.src = src;
+            });
+        }
+
+        function roundedRect(context, x, y, width, height, radius) {
+            const r = Math.min(radius, width / 2, height / 2);
+            context.beginPath();
+            context.moveTo(x + r, y);
+            context.lineTo(x + width - r, y);
+            context.quadraticCurveTo(x + width, y, x + width, y + r);
+            context.lineTo(x + width, y + height - r);
+            context.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+            context.lineTo(x + r, y + height);
+            context.quadraticCurveTo(x, y + height, x, y + height - r);
+            context.lineTo(x, y + r);
+            context.quadraticCurveTo(x, y, x + r, y);
+            context.closePath();
+        }
+
+        function getWrappedLines(context, text, maxWidth, maxLines = Infinity) {
+            const chars = Array.from(String(text || ''));
+            let line = '';
+            let lines = [];
+            chars.forEach(char => {
+                const testLine = line + char;
+                if (context.measureText(testLine).width > maxWidth && line) {
+                    lines.push(line);
+                    line = char;
+                } else {
+                    line = testLine;
+                }
+            });
+            if (line) lines.push(line);
+            if (lines.length > maxLines) {
+                lines = lines.slice(0, maxLines);
+                while (context.measureText(`${lines[lines.length - 1]}...`).width > maxWidth && lines[lines.length - 1].length > 0) {
+                    lines[lines.length - 1] = lines[lines.length - 1].slice(0, -1);
+                }
+                lines[lines.length - 1] = `${lines[lines.length - 1]}...`;
+            }
+            return lines.length ? lines : [''];
+        }
+
+        function drawWrappedText(context, text, x, y, maxWidth, lineHeight, maxLines) {
+            const lines = getWrappedLines(context, text, maxWidth, maxLines);
+            lines.forEach((lineText, index) => context.fillText(lineText, x, y + index * lineHeight));
+            return lines.length;
+        }
+
+        async function downloadRecordCard(record) {
+            if (!record) return;
+            const scale = 3;
+            const width = 516;
+            const height = 960;
+            const padding = 34;
+            const cardX = 54;
+            const cardY = 38;
+            const cardWidth = width - cardX * 2;
+            const cardHeight = height - 76;
+            const canvas = document.createElement('canvas');
+            canvas.width = width * scale;
+            canvas.height = height * scale;
+            const context = canvas.getContext('2d');
+            context.scale(scale, scale);
+            context.fillStyle = '#F5F5F7';
+            context.fillRect(0, 0, width, height);
+            context.shadowColor = 'rgba(29, 29, 31, 0.14)';
+            context.shadowBlur = 34;
+            context.shadowOffsetY = 18;
+            context.fillStyle = 'rgba(255, 255, 255, 0.96)';
+            roundedRect(context, cardX, cardY, cardWidth, cardHeight, 28);
+            context.fill();
+            context.shadowColor = 'transparent';
+
+            const imageX = cardX + padding;
+            const imageY = cardY + padding;
+            const imageWidth = cardWidth - padding * 2;
+            const imageHeight = 390;
+            context.fillStyle = '#F8F6F4';
+            roundedRect(context, imageX, imageY, imageWidth, imageHeight, 22);
+            context.fill();
+            const image = await loadDrawableImage(record.image);
+            if (image) {
+                const ratio = Math.min(imageWidth / image.naturalWidth, imageHeight / image.naturalHeight);
+                const drawWidth = image.naturalWidth * ratio;
+                const drawHeight = image.naturalHeight * ratio;
+                context.save();
+                roundedRect(context, imageX, imageY, imageWidth, imageHeight, 22);
+                context.clip();
+                context.drawImage(image, imageX + (imageWidth - drawWidth) / 2, imageY + (imageHeight - drawHeight) / 2, drawWidth, drawHeight);
+                context.restore();
+            }
+
+            const dateText = `${String(record.date.getMonth() + 1).padStart(2, '0')}.${String(record.date.getDate()).padStart(2, '0')}`;
+            const actionText = record.actionType === 'received' ? '收到' : '送出';
+            context.font = 'bold 18px Arial, sans-serif';
+            context.textBaseline = 'middle';
+            context.fillStyle = 'rgba(255, 255, 255, 0.92)';
+            roundedRect(context, imageX + 14, imageY + 14, 64, 30, 15);
+            context.fill();
+            context.fillStyle = '#A67684';
+            context.fillText(dateText, imageX + 27, imageY + 29);
+            context.fillStyle = record.actionType === 'received' ? 'rgba(210, 165, 179, 0.92)' : 'rgba(134, 134, 139, 0.86)';
+            roundedRect(context, imageX + imageWidth - 72, imageY + 14, 58, 30, 15);
+            context.fill();
+            context.fillStyle = '#FFFFFF';
+            context.fillText(actionText, imageX + imageWidth - 59, imageY + 29);
+
+            const textX = cardX + padding;
+            let textY = imageY + imageHeight + 44;
+            context.textBaseline = 'alphabetic';
+            context.fillStyle = '#1D1D1F';
+            context.font = 'bold 28px "Noto Serif SC", serif';
+            const titleLines = drawWrappedText(context, record.title, textX, textY, cardWidth - padding * 2, 34, 1);
+            textY += titleLines * 34 + 8;
+            context.fillStyle = '#86868B';
+            context.font = 'italic 19px "Noto Serif SC", serif';
+            const commentLines = drawWrappedText(context, `“${record.comment}”`, textX, textY, cardWidth - padding * 2, 28, 2);
+            textY += commentLines * 28 + 26;
+            const chipTags = (record.tags || []).slice(0, 2).map(parseFlowerTag);
+            chipTags.forEach((flower, index) => {
+                const chipX = textX + index * 156;
+                const chipY = textY;
+                context.fillStyle = 'rgba(246, 235, 237, 0.86)';
+                roundedRect(context, chipX, chipY, 136, 30, 15);
+                context.fill();
+                context.fillStyle = '#A67684';
+                context.font = 'bold 16px Arial, sans-serif';
+                context.textBaseline = 'middle';
+                const label = `${flower.icon}${cleanFlowerName(flower.name || '花材')}`;
+                context.fillText(label.length > 8 ? `${label.slice(0, 8)}...` : label, chipX + 12, chipY + 15);
+            });
+            textY += chipTags.length ? 58 : 16;
+
+            const story = record.story || '那天忘了写下故事，但花香依然记得。';
+            context.textBaseline = 'alphabetic';
+            context.fillStyle = '#86868B';
+            context.font = 'bold 13px Arial, sans-serif';
+            context.fillText('这一天的故事', textX, textY);
+            textY += 18;
+
+            const storyBoxX = textX;
+            const storyBoxY = textY;
+            const storyBoxWidth = cardWidth - padding * 2;
+            const storyMaxLines = 5;
+            context.font = '18px "Noto Serif SC", serif';
+            const storyLines = getWrappedLines(context, story, storyBoxWidth - 28, storyMaxLines);
+            const storyBoxHeight = Math.max(92, storyLines.length * 27 + 28);
+            context.fillStyle = '#F8F8F9';
+            roundedRect(context, storyBoxX, storyBoxY, storyBoxWidth, storyBoxHeight, 18);
+            context.fill();
+            context.fillStyle = '#1D1D1F';
+            context.textBaseline = 'alphabetic';
+            storyLines.forEach((lineText, index) => {
+                context.fillText(lineText, storyBoxX + 14, storyBoxY + 30 + index * 27);
+            });
+
+            context.fillStyle = '#C7C7CC';
+            context.font = 'bold 11px Arial, sans-serif';
+            context.textAlign = 'center';
+            context.fillText('Flora Story', cardX + cardWidth / 2, cardY + cardHeight - 24);
+            context.textAlign = 'left';
+
+            const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+            if (!blob) throw new Error('卡片图片生成失败。');
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${safeFileName(record.title)}.png`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.setTimeout(() => URL.revokeObjectURL(url), 1200);
+        }
+
+        async function readApiJson(response, fallbackMessage) {
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                throw new Error(data.error || fallbackMessage);
+            }
+            return data;
+        }
+
+        function renderAuthState() {
+            const trigger = document.getElementById('auth-trigger');
+            const panel = document.getElementById('auth-panel');
+            const signedOut = document.getElementById('auth-signed-out');
+            const signedIn = document.getElementById('auth-signed-in');
+            const emailLabel = document.getElementById('auth-user-email');
+            if (!panel || !signedOut || !signedIn) return;
+            if (trigger) {
+                trigger.querySelector('span').innerText = appState.currentUser ? 'Account' : 'Login';
+            }
+            if (appState.currentUser) {
+                signedOut.classList.add('hidden');
+                signedIn.classList.remove('hidden');
+                signedIn.classList.add('flex');
+                emailLabel.innerText = appState.currentUser.email;
+            } else {
+                signedOut.classList.remove('hidden');
+                signedIn.classList.add('hidden');
+                signedIn.classList.remove('flex');
+            }
+        }
+
+        function toggleAuthPanel() {
+            const panel = document.getElementById('auth-panel');
+            if (!panel) return;
+            panel.classList.toggle('hidden');
+        }
+
+        function bindAuthDismiss() {
+            document.addEventListener('pointerdown', event => {
+                const panel = document.getElementById('auth-panel');
+                const trigger = document.getElementById('auth-trigger');
+                if (!panel || panel.classList.contains('hidden')) return;
+                if (panel.contains(event.target) || trigger.contains(event.target)) return;
+                panel.classList.add('hidden');
+            });
+        }
+
+        async function loadCurrentUser() {
+            try {
+                const response = await fetch('/api/auth/me');
+                const data = await readApiJson(response, '登录状态读取失败。');
+                appState.currentUser = data.user || null;
+            } catch (error) {
+                appState.currentUser = null;
+            }
+            renderAuthState();
+        }
+
+        async function requestLoginCode() {
+            const emailInput = document.getElementById('auth-email-input');
+            const codeInput = document.getElementById('auth-code-input');
+            const sendButton = document.getElementById('auth-send-button');
+            const loginButton = document.getElementById('auth-login-button');
+            const email = emailInput.value.trim();
+            if (!email) {
+                showToast('先输入邮箱。');
+                return;
+            }
+            sendButton.disabled = true;
+            try {
+                await readApiJson(await fetch('/api/auth/request-code', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email })
+                }), '验证码发送失败。');
+                codeInput.classList.remove('hidden');
+                loginButton.classList.remove('hidden');
+                codeInput.focus();
+                showToast('验证码已发送。');
+            } catch (error) {
+                showToast(error.message || '验证码发送失败。');
+            } finally {
+                sendButton.disabled = false;
+            }
+        }
+
+        async function verifyLoginCode() {
+            const email = document.getElementById('auth-email-input').value.trim();
+            const code = document.getElementById('auth-code-input').value.trim();
+            if (!email || !code) {
+                showToast('请输入邮箱和验证码。');
+                return;
+            }
+            try {
+                const data = await readApiJson(await fetch('/api/auth/verify-code', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, code })
+                }), '登录失败。');
+                appState.currentUser = data.user;
+                renderAuthState();
+                document.getElementById('auth-panel').classList.add('hidden');
+                await loadRecordsFromApi();
+                showToast('已经登录。');
+            } catch (error) {
+                showToast(error.message || '登录失败。');
+            }
+        }
+
+        async function logoutUser() {
+            try {
+                await fetch('/api/auth/logout', { method: 'POST' });
+            } finally {
+                appState.currentUser = null;
+                renderAuthState();
+                document.getElementById('auth-panel').classList.add('hidden');
+                await loadRecordsFromApi();
+                showToast('已退出登录。');
+            }
+        }
+
+        async function uploadPhotoIfNeeded() {
+            if (appState.uploadedImageUrl) return appState.uploadedImageUrl;
+            if (!appState.photoFile) throw new Error('先选一张花束照片吧。');
+            const formData = new FormData();
+            formData.append('file', appState.photoFile);
+            const response = await fetch('/api/uploads', {
+                method: 'POST',
+                body: formData
+            });
+            const data = await readApiJson(response, '图片上传失败。');
+            appState.uploadedImageUrl = data.url;
+            return data.url;
+        }
+
+        function normalizeApiRecord(apiRecord) {
+            const date = new Date(apiRecord.recordDate || apiRecord.createdAt || Date.now());
+            const flowerDetails = (apiRecord.flower_details || []).map(cleanFlowerDetail);
+            return ensureLocalId({
+                id: apiRecord.id,
+                title: apiRecord.title || '未命名花束',
+                image: apiRecord.generatedImageUrl || apiRecord.originalImageUrl,
+                originalImageUrl: apiRecord.originalImageUrl,
+                generatedImageUrl: apiRecord.generatedImageUrl || apiRecord.originalImageUrl,
+                actionType: apiRecord.actionType || 'received',
+                date,
+                style: apiRecord.style || 'original',
+                flowerDetails,
+                tags: flowerDetailsToTags(flowerDetails),
+                comment: apiRecord.comment || '这束花被认真记住了。',
+                story: apiRecord.story || ''
+            });
+        }
+
+        async function loadRecordsFromApi() {
+            const response = await fetch('/api/records?year=all&actionType=all');
+            const data = await readApiJson(response, '花历加载失败。');
+            appState.records = (data.records || []).map(normalizeApiRecord);
+            renderTimelineRecords();
+            renderStatsSummary();
+            renderFloraBook();
+        }
+
+        async function reloadRecordsQuietly() {
+            try {
+                await loadRecordsFromApi();
+            } catch (error) {
+                showToast(error.message || '花历加载失败。');
+                renderTimelineRecords();
+                renderStatsSummary();
+                renderFloraBook();
+            }
+        }
+
+        function buildFallbackRecord(message) {
+            const originalImageUrl = appState.uploadedImageUrl || appState.photoDataUrl;
+            const storyInput = document.getElementById('wizard-story-input').value.trim();
+            const flowerDetails = [
+                { name: '原图', meaning: '生成暂未成功，先保留真实照片' }
+            ];
+            return ensureLocalId({
+                title: '原图待生',
+                image: appState.photoDataUrl,
+                originalImageUrl,
+                generatedImageUrl: originalImageUrl,
+                actionType: appState.actionType,
+                date: new Date(appState.selectedDate),
+                style: appState.visualStyle,
+                flowerDetails,
+                tags: flowerDetailsToTags(flowerDetails),
+                comment: message || '生成没成功，但这束花先被稳稳留住。',
+                story: storyInput
+            });
+        }
+
+        async function generateRecordFromApi() {
+            const originalImageUrl = await uploadPhotoIfNeeded();
+            const storyInput = document.getElementById('wizard-story-input').value.trim();
+            const response = await fetch('/api/ai/generate-record', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    originalImageUrl,
+                    actionType: appState.actionType,
+                    recordDate: formatDateKey(appState.selectedDate),
+                    story: storyInput,
+                    style: appState.visualStyle
+                })
+            });
+            const data = await readApiJson(response, 'AI 生成失败。');
+            const flowerDetails = data.flower_details || [];
+            return ensureLocalId({
+                title: data.title,
+                image: appState.visualStyle === 'original'
+                    ? appState.photoDataUrl
+                    : data.generatedImageUrl || data.originalImageUrl || appState.photoDataUrl,
+                originalImageUrl: data.originalImageUrl || originalImageUrl,
+                generatedImageUrl: data.generatedImageUrl || originalImageUrl,
+                actionType: data.actionType || appState.actionType,
+                date: new Date(data.recordDate || appState.selectedDate),
+                style: data.style || appState.visualStyle,
+                flowerDetails,
+                tags: flowerDetailsToTags(flowerDetails),
+                comment: data.comment,
+                story: storyInput
+            });
+        }
+
+        function startOfLocalDay(date) {
+            return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+        }
+
+        function formatDateKey(date) {
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+
+        function formatDateDot(date) {
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            return `${y}.${m}.${d}`;
+        }
+
+        function weekLabel(date) {
+            return ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][date.getDay()];
+        }
+
+        function updateDateLabels() {
+            document.getElementById('date-main-label').innerText = formatDateDot(appState.selectedDate);
+            document.getElementById('date-week-label').innerText = weekLabel(appState.selectedDate);
+            const picker = document.getElementById('date-picker-input');
+            if (picker) {
+                picker.max = formatDateKey(today);
+                picker.value = formatDateKey(appState.selectedDate);
+            }
+        }
+
+        function switchTab(tab) {
+            const timeline = document.getElementById('view-timeline');
+            const stats = document.getElementById('view-stats');
+            const navTimeline = document.getElementById('nav-timeline');
+            const navStats = document.getElementById('nav-stats');
+
+            if (tab === 'timeline') {
+                timeline.classList.add('active');
+                stats.classList.remove('active');
+                navTimeline.classList.remove('text-[#86868B]');
+                navTimeline.classList.add('text-primary');
+                navStats.classList.remove('text-primary');
+                navStats.classList.add('text-[#86868B]');
+                setTimeout(initScrollAnimations, 100);
+            } else {
+                stats.classList.add('active');
+                timeline.classList.remove('active');
+                navStats.classList.remove('text-[#86868B]');
+                navStats.classList.add('text-primary');
+                navTimeline.classList.remove('text-primary');
+                navTimeline.classList.add('text-[#86868B]');
+                renderRomanticQuote();
+            }
+        }
+
+        function jumpToTimeline() {
+            setTimelineFilter('action', 'all');
+            setTimelineFilter('year', '2026', { toggle: false });
+            switchTab('timeline');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function jumpToRecord(recordId) {
+            setTimelineFilter('action', 'all');
+            setTimelineFilter('year', '2026', { toggle: false });
+            switchTab('timeline');
+            window.setTimeout(() => {
+                const record = document.getElementById(recordId);
+                if (!record) return;
+                const targetTop = Math.max(
+                    0,
+                    record.getBoundingClientRect().top + window.scrollY - ((window.innerHeight - record.offsetHeight) / 2)
+                );
+                window.scrollTo({ top: targetTop, behavior: 'smooth' });
+                window.setTimeout(() => {
+                    if (Math.abs(window.scrollY - targetTop) > 24) {
+                        window.scrollTo({ top: targetTop, behavior: 'auto' });
+                    }
+                }, 520);
+                const card = record.querySelector('.glass-card');
+                if (card) {
+                    card.classList.add('record-focus');
+                    window.setTimeout(() => card.classList.remove('record-focus'), 1800);
+                }
+            }, 160);
+        }
+
+        function toggleYearFilter(year) {
+            const button = document.querySelector(`[data-filter-group="year"][data-filter-value="${year}"]`);
+            const shouldClear = button && button.classList.contains('active');
+            appState.filters.year = shouldClear ? 'all' : year;
+            document.querySelectorAll('[data-filter-group="year"]').forEach(item => {
+                const selected = !shouldClear && item.dataset.filterValue === year;
+                item.classList.toggle('active', selected);
+                item.classList.toggle('text-[#86868B]', !selected);
+                item.classList.toggle('bg-white/70', !selected);
+                item.classList.toggle('border-white/80', !selected);
+            });
+            applyTimelineFilters();
+        }
+
+        function openWizard() {
+            resetWizard();
+            document.getElementById('wizard-overlay').classList.add('active');
+            goToStep(1);
+        }
+        
+        function closeWizard() {
+            document.getElementById('wizard-overlay').classList.remove('active');
+        }
+
+        function resetWizard() {
+            appState.actionType = 'received';
+            appState.selectedDate = new Date(today);
+            appState.visualStyle = 'watercolor';
+            appState.photoDataUrl = '';
+            appState.photoFile = null;
+            appState.uploadedImageUrl = '';
+            appState.generatedRecord = null;
+            appState.lastFailedRecord = null;
+            document.getElementById('flower-file-input').value = '';
+            document.getElementById('wizard-story-input').value = '';
+            document.getElementById('story-count').innerText = '0 / 300';
+            document.getElementById('upload-preview').classList.add('hidden');
+            document.getElementById('upload-change-chip').classList.add('hidden');
+            document.getElementById('upload-placeholder').classList.remove('hidden');
+            updateNextButton();
+            updateDateLabels();
+            selectActionType('received');
+            selectVisualStyle('watercolor');
+        }
+
+        function goToStep(step) {
+            const steps = [1, 2, 3, 4];
+            steps.forEach(s => {
+                const el = document.getElementById(`step-${s}`);
+                if (!el) return;
+                if (s < step) {
+                    el.style.left = '-100%';
+                    el.style.opacity = '0';
+                } else if (s === step) {
+                    el.style.left = '0';
+                    el.style.opacity = '1';
+                    el.classList.remove('hidden');
+                } else {
+                    el.style.left = '100%';
+                    el.style.opacity = '0';
+                }
+            });
+        }
+
+        function selectActionType(type) {
+            appState.actionType = type;
+            document.querySelectorAll('.action-choice').forEach(button => {
+                const selected = button.dataset.actionChoice === type;
+                button.classList.toggle('bg-primary', selected);
+                button.classList.toggle('text-white', selected);
+                button.classList.toggle('shadow-md', selected);
+                button.classList.toggle('shadow-primary/30', selected);
+                button.classList.toggle('bg-white', !selected);
+                button.classList.toggle('text-gray-500', !selected);
+                button.classList.toggle('border', !selected);
+                button.classList.toggle('border-gray-200', !selected);
+            });
+        }
+
+        function selectVisualStyle(style) {
+            appState.visualStyle = style;
+            document.querySelectorAll('.style-option').forEach(option => {
+                const selected = option.dataset.style === style;
+                option.classList.toggle('selected', selected);
+                option.classList.toggle('bg-white', !selected);
+                option.classList.toggle('border-gray-200', !selected);
+                option.classList.toggle('border-primary', selected);
+                option.classList.toggle('border-2', selected);
+                const check = option.querySelector('.style-check');
+                if (check) {
+                    check.classList.toggle('hidden', !selected);
+                    check.classList.toggle('flex', selected);
+                }
+            });
+            const generateButton = document.getElementById('generate-button');
+            const helperText = document.getElementById('style-helper-text');
+            if (generateButton) {
+                generateButton.innerText = style === 'original' ? '识别并保留原图' : '开始生成魔法';
+            }
+            if (helperText) {
+                helperText.innerText = style === 'original'
+                    ? '调用 AI 识别花材和文案，不生成新图片'
+                    : 'AI 将基于照片为你定制专属插画';
+            }
+        }
+
+        function updateNextButton() {
+            document.getElementById('wizard-next-button').disabled = !appState.photoDataUrl;
+        }
+
+        function bindUploadInput() {
+            const input = document.getElementById('flower-file-input');
+            input.addEventListener('change', event => {
+                const file = event.target.files && event.target.files[0];
+                if (!file) return;
+                if (!file.type.startsWith('image/')) {
+                    showToast('请选择一张鲜花照片。');
+                    return;
+                }
+                appState.photoFile = file;
+                appState.uploadedImageUrl = '';
+                const reader = new FileReader();
+                reader.onload = () => {
+                    appState.photoDataUrl = reader.result;
+                    const preview = document.getElementById('upload-preview');
+                    preview.src = appState.photoDataUrl;
+                    preview.classList.remove('hidden');
+                    document.getElementById('upload-placeholder').classList.add('hidden');
+                    document.getElementById('upload-change-chip').classList.remove('hidden');
+                    updateNextButton();
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function bindStoryCounter() {
+            const textarea = document.getElementById('wizard-story-input');
+            textarea.addEventListener('input', () => {
+                document.getElementById('story-count').innerText = `${textarea.value.length} / 300`;
+            });
+        }
+
+        function bindDateDrag() {
+            const card = document.getElementById('date-drag-card');
+            let startX = null;
+            let startDate = null;
+            let didDrag = false;
+            let futureToastShown = false;
+
+            card.addEventListener('pointerdown', event => {
+                startX = event.clientX;
+                startDate = new Date(appState.selectedDate);
+                didDrag = false;
+                futureToastShown = false;
+                card.classList.add('dragging');
+                card.setPointerCapture(event.pointerId);
+            });
+
+            card.addEventListener('pointermove', event => {
+                if (startX === null) return;
+                const delta = event.clientX - startX;
+                if (Math.abs(delta) > 8) didDrag = true;
+                const offsetDays = Math.round(delta / 46);
+                const nextDate = new Date(startDate.getTime() + offsetDays * MS_PER_DAY);
+
+                if (nextDate > today) {
+                    appState.selectedDate = new Date(today);
+                    if (!futureToastShown) {
+                        showToast('花还没有开到那一天。');
+                        futureToastShown = true;
+                    }
+                } else {
+                    appState.selectedDate = startOfLocalDay(nextDate);
+                }
+                updateDateLabels();
+            });
+
+            const endDrag = event => {
+                if (startX === null) return;
+                startX = null;
+                startDate = null;
+                card.classList.remove('dragging');
+                card.dataset.wasDragged = didDrag ? 'true' : 'false';
+                try { card.releasePointerCapture(event.pointerId); } catch (error) {}
+            };
+
+            card.addEventListener('pointerup', endDrag);
+            card.addEventListener('pointercancel', endDrag);
+        }
+
+        function bindDatePicker() {
+            const trigger = document.getElementById('date-picker-trigger');
+            const picker = document.getElementById('date-picker-input');
+            const card = document.getElementById('date-drag-card');
+            if (!trigger || !picker) return;
+            picker.max = formatDateKey(today);
+            picker.value = formatDateKey(appState.selectedDate);
+
+            const openPicker = () => {
+                if (typeof picker.showPicker === 'function') {
+                    picker.showPicker();
+                } else {
+                    picker.click();
+                }
+            };
+
+            trigger.addEventListener('click', openPicker);
+            if (card) {
+                card.addEventListener('click', () => {
+                    if (card.dataset.wasDragged === 'true') {
+                        card.dataset.wasDragged = 'false';
+                        return;
+                    }
+                    openPicker();
+                });
+            }
+            picker.addEventListener('change', () => {
+                if (!picker.value) return;
+                const selected = startOfLocalDay(new Date(`${picker.value}T00:00:00`));
+                if (selected > today) {
+                    appState.selectedDate = new Date(today);
+                    showToast('花还没有开到那一天。');
+                } else {
+                    appState.selectedDate = selected;
+                }
+                updateDateLabels();
+            });
+        }
+
+        function bindOriginalPeek() {
+            const button = document.getElementById('peek-original-button');
+            if (!button) return;
+            const showOriginal = event => {
+                event.preventDefault();
+                setPreviewImage(true);
+            };
+            const showGenerated = event => {
+                event.preventDefault();
+                setPreviewImage(false);
+            };
+            button.addEventListener('pointerdown', showOriginal);
+            button.addEventListener('pointerup', showGenerated);
+            button.addEventListener('pointercancel', showGenerated);
+            button.addEventListener('pointerleave', showGenerated);
+            button.addEventListener('touchstart', showOriginal, { passive: false });
+            button.addEventListener('touchend', showGenerated);
+        }
+
+        function setRecordSide(record, side) {
+            const marker = record.querySelector(':scope > .absolute');
+            const slots = Array.from(record.children).filter(child => child !== marker);
+            const cardSlot = slots.find(slot => slot.querySelector('.glass-card'));
+            const spacerSlot = slots.find(slot => !slot.querySelector('.glass-card'));
+            if (!marker || !cardSlot || !spacerSlot) return;
+
+            record.classList.toggle('left', side === 'left');
+            record.classList.toggle('right', side === 'right');
+            if (side === 'left') {
+                cardSlot.className = 'w-1/2 pr-4 flex justify-end';
+                spacerSlot.className = 'w-1/2 pl-4';
+                record.append(marker, cardSlot, spacerSlot);
+            } else {
+                spacerSlot.className = 'w-1/2 pr-4';
+                cardSlot.className = 'w-1/2 pl-4 flex justify-start';
+                record.append(marker, spacerSlot, cardSlot);
+            }
+        }
+
+        function renderTimelineRecords() {
+            const container = document.getElementById('timeline-container');
+            const empty = document.getElementById('timeline-empty');
+            container.querySelectorAll('.timeline-record').forEach(record => record.remove());
+            appState.records.forEach(record => appendTimelineRecord(record));
+            container.appendChild(empty);
+            applyTimelineFilters();
+        }
+
+        async function deleteTimelineRecord(recordId, event) {
+            if (event) event.stopPropagation();
+            const record = appState.records.find(item => item.id === recordId || item.localId === recordId);
+            if (!record) return;
+            if (!window.confirm(`删除「${record.title}」吗？`)) return;
+            try {
+                if (record.id) {
+                    const response = await fetch(`/api/records/${encodeURIComponent(record.id)}`, {
+                        method: 'DELETE'
+                    });
+                    await readApiJson(response, '删除失败。');
+                }
+                appState.records = appState.records.filter(item => item.id !== recordId && item.localId !== recordId);
+                renderTimelineRecords();
+                renderStatsSummary();
+                renderFloraBook();
+                showToast('这张花束卡片已经删除。');
+            } catch (error) {
+                showToast(error.message || '删除失败，请再试一次。');
+            }
+        }
+
+        async function downloadTimelineCard(recordId, event) {
+            if (event) event.stopPropagation();
+            const record = appState.records.find(item => item.id === recordId || item.localId === recordId);
+            try {
+                await downloadRecordCard(record);
+                showToast('卡片已开始下载。');
+            } catch (error) {
+                showToast(error.message || '卡片下载失败。');
+            }
+        }
+
+        async function downloadDetailCard(event) {
+            if (event) event.stopPropagation();
+            const record = appState.detailRecord && appState.records.find(item =>
+                item.id === appState.detailRecord.id || item.localId === appState.detailRecord.localId
+            );
+            try {
+                await downloadRecordCard(record);
+                showToast('卡片已开始下载。');
+            } catch (error) {
+                showToast(error.message || '卡片下载失败。');
+            }
+        }
+
+        async function deleteDetailRecord(event) {
+            if (event) event.stopPropagation();
+            if (!appState.detailRecord) return;
+            await deleteTimelineRecord(appState.detailRecord.id || appState.detailRecord.localId, event);
+            closeFlowerDetail();
+        }
+
+        function setTimelineFilter(group, value, options = {}) {
+            const shouldToggle = options.toggle !== false;
+            const currentButton = document.querySelector(`[data-filter-group="${group}"][data-filter-value="${value}"]`);
+            const alreadySelected = currentButton && currentButton.classList.contains('active');
+            const nextValue = group === 'year' && shouldToggle && alreadySelected ? 'all' : value;
+            appState.filters[group] = nextValue;
+            document.querySelectorAll(`[data-filter-group="${group}"]`).forEach(button => {
+                const selected = button.dataset.filterValue === nextValue;
+                button.classList.toggle('active', selected);
+                button.classList.toggle('text-[#86868B]', !selected);
+                button.classList.toggle('bg-white/70', !selected && group === 'year');
+                button.classList.toggle('border-white/80', !selected && group === 'year');
+            });
+            applyTimelineFilters();
+        }
+
+        function bindFilters() {
+            document.querySelectorAll('[data-filter-group]').forEach(button => {
+                if (button.dataset.filterGroup === 'year') return;
+                button.addEventListener('click', () => {
+                    setTimelineFilter(button.dataset.filterGroup, button.dataset.filterValue);
+                });
+            });
+        }
+
+        function applyTimelineFilters() {
+            const visibleRecords = [];
+            document.querySelectorAll('.timeline-record').forEach(record => {
+                const actionMatch = appState.filters.action === 'all' || record.dataset.action === appState.filters.action;
+                const yearMatch = appState.filters.year === 'all' || record.dataset.year === appState.filters.year;
+                const visible = actionMatch && yearMatch;
+                record.classList.toggle('hidden', !visible);
+                record.style.display = visible ? '' : 'none';
+                if (visible) visibleRecords.push(record);
+            });
+            visibleRecords.forEach((record, index) => {
+                setRecordSide(record, index % 2 === 0 ? 'left' : 'right');
+                record.classList.toggle('record-compressed', index > 0);
+            });
+            const empty = document.getElementById('timeline-empty');
+            empty.classList.toggle('hidden', visibleRecords.length > 0);
+            empty.style.display = visibleRecords.length > 0 ? 'none' : '';
+            setTimeout(initScrollAnimations, 80);
+        }
+        
+        async function startLoading() {
+            if (!appState.photoDataUrl) {
+                showToast('先选一张花束照片吧。');
+                return;
+            }
+            goToStep(3); 
+            const textEl = document.getElementById('loading-text');
+            let currentIndex = 0;
+            
+            const interval = setInterval(() => {
+                textEl.style.opacity = '0';
+                setTimeout(() => {
+                    currentIndex = (currentIndex + 1) % loadingTexts.length;
+                    textEl.innerText = loadingTexts[currentIndex];
+                    textEl.style.opacity = '1';
+                }, 300);
+            }, 1200);
+
+            try {
+                appState.generatedRecord = await generateRecordFromApi();
+                clearInterval(interval);
+                document.getElementById('step-3').classList.add('hidden');
+                renderGeneratedResult();
+                goToStep(4);
+            } catch (error) {
+                clearInterval(interval);
+                document.getElementById('step-3').classList.add('hidden');
+                appState.generatedRecord = buildFallbackRecord(error.message || '生成失败，可以重试。');
+                appState.lastFailedRecord = appState.generatedRecord;
+                renderGeneratedResult();
+                showToast('生成失败，已保留原图，可以重试。');
+                goToStep(4);
+            }
+        }
+
+        async function retryGeneration() {
+            if (!appState.photoDataUrl) {
+                showToast('先选一张花束照片吧。');
+                return;
+            }
+            goToStep(3);
+            const textEl = document.getElementById('loading-text');
+            textEl.innerText = '正在重新生成...';
+            try {
+                appState.generatedRecord = await generateRecordFromApi();
+                appState.lastFailedRecord = null;
+                document.getElementById('step-3').classList.add('hidden');
+                renderGeneratedResult();
+                goToStep(4);
+            } catch (error) {
+                appState.generatedRecord = buildFallbackRecord(error.message || '生成失败，可以重试。');
+                appState.lastFailedRecord = appState.generatedRecord;
+                document.getElementById('step-3').classList.add('hidden');
+                renderGeneratedResult();
+                showToast('生成失败，已保留原图，可以重试。');
+                goToStep(4);
+            }
+        }
+
+        function setPreviewImage(useOriginal) {
+            const record = appState.generatedRecord;
+            if (!record) return;
+            const preview = document.getElementById('generated-preview');
+            const label = document.getElementById('generated-style-label');
+            preview.src = useOriginal ? appState.photoDataUrl : record.image;
+            if (label) label.innerText = useOriginal ? '原图预览' : styleTag(record.style, record.generatedImageUrl, record.originalImageUrl);
+        }
+
+        function renderGeneratedResult() {
+            const record = appState.generatedRecord;
+            if (!record) return;
+
+            document.getElementById('generated-preview').src = record.image;
+            document.getElementById('generated-style-label').innerText = styleTag(record.style, record.generatedImageUrl, record.originalImageUrl);
+            document.getElementById('generated-title').innerText = record.title;
+            document.getElementById('generated-comment').innerText = `“${record.comment}”`;
+            const tagsContainer = document.getElementById('generated-tags');
+            tagsContainer.innerHTML = '';
+            record.tags.forEach(tag => {
+                const parts = tag.split(/[:：]/);
+                const row = document.createElement('div');
+                row.className = 'flex items-start text-xs';
+                row.innerHTML = `
+                    <span class="text-primary-dark font-bold mr-2 whitespace-nowrap">${escapeHtml(parts[0])}：</span>
+                    <span class="text-[#5E6C79] leading-relaxed">${escapeHtml(parts.slice(1).join('：'))}</span>
+                `;
+                tagsContainer.appendChild(row);
+            });
+            
+            const storyContainer = document.getElementById('wizard-story-container');
+            const storyDisplay = document.getElementById('wizard-story-display');
+            if (record.story) {
+                storyDisplay.innerText = record.story;
+                storyContainer.classList.remove('hidden');
+            } else {
+                storyContainer.classList.add('hidden');
+            }
+        }
+
+        function parseFlowerTag(tag) {
+            const parts = tag.split(/[:：]/);
+            const rawName = (parts[0] || '').trim();
+            const meaning = (parts.slice(1).join('：') || '').trim();
+            const iconMatch = rawName.match(/^(\S+)\s*(.*)$/);
+            return {
+                icon: iconMatch ? iconMatch[1] : '💐',
+                name: cleanFlowerName(iconMatch ? iconMatch[2] || rawName : rawName),
+                meaning
+            };
+        }
+
+        function flowerMiniMarkup(tag) {
+            const flower = parseFlowerTag(tag);
+            return `
+                <div class="flower-mini ml-2">
+                    <span class="flower-mini-icon">${escapeHtml(flower.icon)}</span>
+                    <span class="flower-mini-text">
+                        <span class="flower-mini-name">${escapeHtml(flower.name || '花材')}</span>
+                        <span class="flower-mini-meaning">${escapeHtml(flower.meaning || '心意')}</span>
+                    </span>
+                </div>
+            `;
+        }
+
+        function flowerStripMarkup(tags) {
+            const flowers = (tags || []).slice(0, 2).map(parseFlowerTag);
+            return `
+                <div class="flower-strip">
+                    ${flowers.map((flower, index) => `
+                        ${index > 0 ? '<span class="flower-chip-separator" aria-hidden="true"></span>' : ''}
+                        <span class="flower-chip">
+                            <span class="flower-chip-icon">${escapeHtml(flower.icon)}</span>
+                            <span class="flower-chip-name">${escapeHtml(flower.name || '花材')}</span>
+                        </span>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        async function saveGeneratedRecord() {
+            if (!appState.generatedRecord) return;
+            try {
+                const record = appState.generatedRecord;
+                const response = await fetch('/api/records', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        title: record.title,
+                        comment: record.comment,
+                        story: record.story || '',
+                        actionType: record.actionType,
+                        recordDate: formatDateKey(record.date),
+                        style: record.style || appState.visualStyle,
+                        originalImageUrl: record.originalImageUrl || record.image,
+                        generatedImageUrl: record.generatedImageUrl || record.image,
+                        flower_details: record.flowerDetails || []
+                    })
+                });
+                const data = await readApiJson(response, '保存失败。');
+                record.id = data.record && data.record.id;
+                ensureLocalId(record);
+                appState.records.unshift(record);
+                renderTimelineRecords();
+                renderStatsSummary();
+                renderFloraBook();
+                closeWizard();
+                showToast('这束花已经长进花历里了。');
+                jumpToTimeline();
+            } catch (error) {
+                showToast(error.message || '保存失败，请再试一次。');
+            }
+        }
+
+        function appendTimelineRecord(record) {
+            const container = document.getElementById('timeline-container');
+            const item = document.createElement('div');
+            const isLeft = document.querySelectorAll('.timeline-record').length % 2 === 0;
+            const actionLabel = record.actionType === 'received' ? '收到' : '送出';
+            const actionColor = record.actionType === 'received' ? 'bg-primary/90' : 'bg-[#86868B]/80';
+            const dateText = `${String(record.date.getMonth() + 1).padStart(2, '0')}.${String(record.date.getDate()).padStart(2, '0')}`;
+            const flowerMarkup = flowerStripMarkup(record.tags);
+            const imageSrc = escapeHtml(record.image);
+            const safeTitle = escapeHtml(record.title);
+            const safeComment = escapeHtml(record.comment);
+            const domId = recordIdForDom(record);
+            const escapedRecordId = escapeHtml(record.id || record.localId);
+            item.className = `timeline-record flex items-center w-full relative reveal-card ${isLeft ? 'left' : 'right'} cursor-pointer active:scale-[0.98] transition-transform`;
+            item.dataset.action = record.actionType;
+            item.dataset.year = String(record.date.getFullYear());
+            item.id = domId;
+            item.innerHTML = `
+                <div class="absolute left-1/2 -translate-x-1/2 w-3 h-3 rounded-full bg-background border-2 border-primary shadow-glow z-20"></div>
+                ${isLeft ? '<div class="w-1/2 pr-4 flex justify-end">' : '<div class="w-1/2 pr-4"></div><div class="w-1/2 pl-4 flex justify-start">'}
+                    <div class="timeline-card glass-card bg-surface shadow-glass border border-white/80 transition-transform duration-300 hover:-translate-y-1">
+                        <div class="relative aspect-[3/4] overflow-hidden rounded-2xl mb-2 shadow-sm bg-[#F8F6F4]">
+                            <img src="${imageSrc}" alt="${safeTitle}" class="object-contain w-full h-full">
+                            <div class="absolute top-1.5 left-1.5 bg-white/90 backdrop-blur-sm px-2 py-0.5 rounded-full text-[9px] font-bold text-primary-dark shadow-sm">${escapeHtml(dateText)}</div>
+                            <div class="absolute top-1.5 right-1.5 ${actionColor} text-white px-2 py-0.5 rounded-full text-[9px] shadow-sm">${actionLabel}</div>
+                        </div>
+                        <div class="px-1 pb-1 pt-0.5">
+                            <div class="flex items-center justify-between mb-1.5">
+                                <h3 class="text-sm font-serif font-bold text-[#1D1D1F] truncate">${safeTitle}</h3>
+                            </div>
+                            <p class="timeline-comment text-[10px] text-[#86868B] font-serif italic leading-snug">“${safeComment}”</p>
+                            ${flowerMarkup}
+                        </div>
+                    </div>
+                </div>
+                ${isLeft ? '<div class="w-1/2 pl-4"></div>' : ''}
+            `;
+            item.addEventListener('click', () => {
+                openFlowerDetail(record.title, record.tags, `“${record.comment}”`, record.image, record.story, {
+                    date: `${formatDateDot(record.date)} · ${weekLabel(record.date)}`,
+                    action: actionLabel,
+                    style: record.style,
+                    originalImageUrl: record.originalImageUrl,
+                    generatedImageUrl: record.generatedImageUrl,
+                    id: record.id,
+                    localId: record.localId
+                });
+            });
+            const empty = document.getElementById('timeline-empty');
+            container.insertBefore(item, empty);
+        }
+
+        function openFlowerDetail(title, tags, comment, imageSrc, story, meta = {}) {
+            appState.detailRecord = { title, image: imageSrc, id: meta.id, localId: meta.localId };
+            document.getElementById('detail-title').innerText = title;
+            document.getElementById('detail-comment').innerText = comment;
+            document.getElementById('detail-image').src = imageSrc;
+            document.getElementById('detail-style').innerText = styleTag(meta.style || 'original', meta.generatedImageUrl || imageSrc, meta.originalImageUrl || imageSrc);
+            const detailMeta = document.getElementById('detail-meta');
+            if (meta.date || meta.action) {
+                document.getElementById('detail-date').innerText = meta.date || '';
+                document.getElementById('detail-action').innerText = meta.action || '';
+                detailMeta.classList.remove('hidden');
+                detailMeta.classList.add('flex');
+            } else {
+                detailMeta.classList.add('hidden');
+                detailMeta.classList.remove('flex');
+            }
+            
+            const tagsContainer = document.getElementById('detail-tags-container');
+            const tagsWrapper = document.getElementById('detail-tags-wrapper');
+            tagsContainer.innerHTML = ''; 
+            
+            if (tags && tags.length > 0) {
+                tagsWrapper.style.display = 'block';
+                tags.forEach(tag => {
+                    const flower = parseFlowerTag(tag);
+                    const name = flower.name || '花材';
+                    const meaning = flower.meaning || '一束被认真记住的花';
+                    
+                    const row = document.createElement('div');
+                    row.className = 'flex items-start text-xs';
+                    row.innerHTML = `
+                        <span class="text-primary-dark font-bold mr-2 whitespace-nowrap">${escapeHtml(name)}：</span>
+                        <span class="text-[#5E6C79] leading-relaxed">${escapeHtml(meaning)}</span>
+                    `;
+                    tagsContainer.appendChild(row);
+                });
+            } else {
+                tagsWrapper.style.display = 'none';
+            }
+            
+            const storyEl = document.getElementById('detail-story');
+            if (story) {
+                storyEl.innerText = story;
+                storyEl.classList.remove('text-gray-400', 'italic');
+            } else {
+                storyEl.innerText = "那天忘了写下故事，但花香依然记得。";
+                storyEl.classList.add('text-gray-400', 'italic');
+            }
+
+            document.getElementById('flower-detail-overlay').classList.add('active');
+        }
+
+        function closeFlowerDetail() {
+            document.getElementById('flower-detail-overlay').classList.remove('active');
+        }
+
+        function chunkArray(items, size) {
+            const chunks = [];
+            for (let index = 0; index < items.length; index += size) {
+                chunks.push(items.slice(index, index + size));
+            }
+            return chunks.length ? chunks : [[]];
+        }
+
+        function buildFloraStats() {
+            const stats = new Map();
+            appState.records.forEach(record => {
+                (record.flowerDetails || []).forEach(flower => {
+                    const name = cleanFlowerName(flower.name || '花材');
+                    if (name === '原图') return;
+                    const current = stats.get(name) || {
+                        icon: flowerIconForName(name),
+                        name,
+                        meaning: flower.meaning || '一束被认真记住的花',
+                        count: 0
+                    };
+                    current.count += 1;
+                    if (flower.meaning) current.meaning = flower.meaning;
+                    stats.set(name, current);
+                });
+            });
+            return Array.from(stats.values()).sort((a, b) => b.count - a.count);
+        }
+
+        function renderBouquetStrip() {
+            const strip = document.getElementById('bouquet-strip');
+            if (!strip) return;
+            strip.innerHTML = '';
+            const maxVisible = 12;
+            const records = appState.records.slice(0, maxVisible);
+            if (records.length === 0) {
+                strip.innerHTML = '<button type="button" class="quiet-empty-action absolute inset-0 flex items-center justify-center text-center text-sm font-serif active:scale-[0.98]">还没有花束，先种下一朵吧。</button>';
+                strip.querySelector('button').addEventListener('click', openWizard);
+                return;
+            }
+            const positions = [
+                { x: 19, y: 58, rotate: -13 },
+                { x: 39, y: 44, rotate: -4 },
+                { x: 61, y: 58, rotate: 6 },
+                { x: 81, y: 47, rotate: 13 },
+                { x: 29, y: 27, rotate: 7 },
+                { x: 51, y: 20, rotate: -9 },
+                { x: 72, y: 27, rotate: 4 },
+                { x: 16, y: 34, rotate: -18 },
+                { x: 84, y: 32, rotate: 16 },
+                { x: 36, y: 12, rotate: -2 },
+                { x: 62, y: 12, rotate: 9 },
+                { x: 50, y: 65, rotate: -7 }
+            ];
+            records.forEach((record, index) => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                const position = positions[index] || positions[positions.length - 1];
+                button.className = 'bouquet-item active:scale-[0.98]';
+                button.style.setProperty('--x', `${position.x}%`);
+                button.style.setProperty('--y', `${position.y}%`);
+                button.style.setProperty('--rotate', `${position.rotate}deg`);
+                button.style.zIndex = String(10 + index);
+                button.setAttribute('aria-label', `查看${record.title}`);
+                button.innerHTML = `
+                    <img src="${escapeHtml(record.image)}" alt="${escapeHtml(record.title)}" class="bouquet-image">
+                `;
+                button.addEventListener('click', () => jumpToRecord(recordIdForDom(record)));
+                strip.appendChild(button);
+            });
+            const hiddenCount = appState.records.length - records.length;
+            if (hiddenCount > 0) {
+                const moreButton = document.createElement('button');
+                moreButton.type = 'button';
+                moreButton.className = 'bouquet-more';
+                moreButton.innerText = `+${hiddenCount}`;
+                moreButton.setAttribute('aria-label', `查看另外 ${hiddenCount} 束花`);
+                moreButton.addEventListener('click', jumpToTimeline);
+                strip.appendChild(moreButton);
+            }
+        }
+
+        function renderStatsSummary() {
+            const records = appState.records;
+            document.getElementById('record-count-label').innerText = `累计记录 ${records.length} 束花`;
+
+            const floraStats = buildFloraStats();
+            const topFlower = floraStats[0];
+            document.getElementById('top-meaning-label').innerText = topFlower ? topFlower.meaning : '等待第一束花';
+            document.getElementById('top-meaning-count').innerText = `出现 ${topFlower ? topFlower.count : 0} 次`;
+
+            const sentFlowers = new Map();
+            records.filter(record => record.actionType === 'sent').forEach(record => {
+                (record.flowerDetails || []).forEach(flower => {
+                    const name = cleanFlowerName(flower.name || '花材');
+                    if (name === '原图') return;
+                    sentFlowers.set(name, (sentFlowers.get(name) || 0) + 1);
+                });
+            });
+            const topSent = Array.from(sentFlowers.entries()).sort((a, b) => b[1] - a[1])[0];
+            document.getElementById('sent-favorite-label').innerText = topSent ? topSent[0] : '暂无送出';
+            document.getElementById('sent-favorite-count').innerText = `共送出 ${topSent ? topSent[1] : 0} 次`;
+
+            const longestStory = [...records].sort((a, b) => (b.story || '').length - (a.story || '').length)[0];
+            const longestCard = document.getElementById('longest-story-card');
+            if (longestStory && longestStory.story) {
+                document.getElementById('longest-story-length').innerText = `写了 ${longestStory.story.length} 字`;
+                document.getElementById('longest-story-title').innerText = longestStory.title;
+                longestCard.onclick = () => openFlowerDetail(longestStory.title, longestStory.tags, `“${longestStory.comment}”`, longestStory.image, longestStory.story, {
+                    date: `${formatDateDot(longestStory.date)} · ${weekLabel(longestStory.date)}`,
+                    action: longestStory.actionType === 'received' ? '收到' : '送出',
+                    style: longestStory.style,
+                    originalImageUrl: longestStory.originalImageUrl,
+                    generatedImageUrl: longestStory.generatedImageUrl,
+                    id: longestStory.id,
+                    localId: longestStory.localId
+                });
+            } else {
+                document.getElementById('longest-story-length').innerText = '还没有故事';
+                document.getElementById('longest-story-title').innerText = '保存后会出现在这里';
+                longestCard.onclick = openWizard;
+            }
+
+            const latest = records[0];
+            const latestCard = document.getElementById('latest-record-card');
+            if (latest) {
+                document.getElementById('latest-record-date').innerText = `${formatDateDot(latest.date)} 记录`;
+                document.getElementById('latest-record-title').innerText = latest.title;
+                latestCard.onclick = () => jumpToRecord(recordIdForDom(latest));
+            } else {
+                document.getElementById('latest-record-date').innerText = '暂无记录';
+                document.getElementById('latest-record-title').innerText = '第一束花会在这里发光';
+                latestCard.onclick = openWizard;
+            }
+
+            floraPages = chunkArray(floraStats, 3);
+            if (appState.floraPage >= floraPages.length) appState.floraPage = 0;
+            renderBouquetStrip();
+            renderRomanticQuote();
+        }
+
+        function renderRomanticQuote() {
+            const quoteEl = document.getElementById('romantic-quote-text');
+            const sourceEl = document.getElementById('romantic-quote-source');
+            if (!quoteEl || !sourceEl) return;
+            const quote = pickRandomItem(romanticQuoteLibrary);
+            quoteEl.innerText = quote.text;
+            sourceEl.innerText = `—— ${quote.source}`;
+        }
+
+        function renderFloraBook() {
+            const list = document.getElementById('flora-book-list');
+            const dots = document.getElementById('flora-book-dots');
+            list.innerHTML = '';
+            dots.innerHTML = '';
+
+            if (!floraPages[appState.floraPage] || floraPages[appState.floraPage].length === 0) {
+                list.innerHTML = '<div class="flora-row text-xs text-[#86868B] font-serif justify-center">保存花束后，图鉴会自动解锁。</div>';
+                return;
+            }
+
+            floraPages[appState.floraPage].forEach(item => {
+                const row = document.createElement('button');
+                row.className = 'flora-row';
+                row.innerHTML = `
+                    <span class="flora-icon">${escapeHtml(item.icon)}</span>
+                    <span class="flora-copy">
+                        <span class="flora-name">${escapeHtml(item.name)}</span>
+                        <span class="flora-meaning">${escapeHtml(item.meaning)}</span>
+                    </span>
+                    <span class="flora-count">x${escapeHtml(item.count)}</span>
+                `;
+                list.appendChild(row);
+            });
+
+            if (floraPages.length <= 1) return;
+
+            const previousButton = document.createElement('button');
+            previousButton.type = 'button';
+            previousButton.className = 'flora-page-button text-sm';
+            previousButton.innerText = '‹';
+            previousButton.disabled = appState.floraPage === 0;
+            previousButton.onclick = () => {
+                appState.floraPage = Math.max(0, appState.floraPage - 1);
+                renderFloraBook();
+            };
+            dots.appendChild(previousButton);
+
+            floraPages.forEach((_, index) => {
+                const dot = document.createElement('button');
+                dot.type = 'button';
+                dot.setAttribute('aria-label', `切换到第 ${index + 1} 页`);
+                dot.onclick = () => {
+                    appState.floraPage = index;
+                    renderFloraBook();
+                };
+                dot.className = index === appState.floraPage
+                    ? 'flora-dot-button active'
+                    : 'flora-dot-button';
+                dot.innerHTML = '<span></span>';
+                dots.appendChild(dot);
+            });
+
+            const nextButton = document.createElement('button');
+            nextButton.type = 'button';
+            nextButton.className = 'flora-page-button text-sm';
+            nextButton.innerText = '›';
+            nextButton.disabled = appState.floraPage >= floraPages.length - 1;
+            nextButton.onclick = () => {
+                appState.floraPage = Math.min(floraPages.length - 1, appState.floraPage + 1);
+                renderFloraBook();
+            };
+            dots.appendChild(nextButton);
+        }
+
+        function showToast(message) {
+            let toast = document.getElementById('app-toast');
+            if (!toast) {
+                toast = document.createElement('div');
+                toast.id = 'app-toast';
+                toast.className = 'toast fixed left-1/2 bottom-24 z-[70] bg-[#1D1D1F]/90 text-white text-xs font-bold px-4 py-2.5 rounded-full shadow-xl backdrop-blur';
+                document.body.appendChild(toast);
+            }
+            toast.innerText = message;
+            toast.classList.add('active');
+            clearTimeout(showToast.timer);
+            showToast.timer = setTimeout(() => toast.classList.remove('active'), 2200);
+        }
+
+        let observer;
+        let scrollHandler;
+        function initScrollAnimations() {
+            const vine = document.getElementById('vine');
+            if (scrollHandler) {
+                window.removeEventListener('scroll', scrollHandler);
+            }
+            scrollHandler = () => {
+                const timelineView = document.getElementById('view-timeline');
+                if (!timelineView.classList.contains('active')) return;
+                
+                const scrollTop = window.scrollY;
+                const docHeight = document.body.scrollHeight;
+                const winHeight = window.innerHeight;
+                
+                if (docHeight > winHeight) {
+                    const scrollPercent = scrollTop / (docHeight - winHeight);
+                    const scaleValue = Math.min(Math.max(scrollPercent + 0.1, 0), 1);
+                    vine.style.transform = `scaleY(${scaleValue})`;
+                }
+            };
+            
+            window.addEventListener('scroll', scrollHandler);
+            scrollHandler();
+
+            const cards = document.querySelectorAll('#view-timeline .reveal-card:not(.hidden)');
+            if (observer) observer.disconnect();
+            observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('active');
+                        observer.unobserve(entry.target);
+                    }
+                });
+            }, {
+                threshold: 0.1,
+                rootMargin: "0px 0px -50px 0px"
+            });
+            
+            cards.forEach(card => {
+                card.classList.remove('active');
+                observer.observe(card);
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            updateDateLabels();
+            bindUploadInput();
+            bindStoryCounter();
+            bindDateDrag();
+            bindDatePicker();
+            bindOriginalPeek();
+            bindFilters();
+            bindAuthDismiss();
+            renderRomanticQuote();
+            loadCurrentUser();
+            reloadRecordsQuietly();
+        });
+    </script>
+</body>
+</html>

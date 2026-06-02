@@ -1,0 +1,66 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model FlowerRecord {
+  id                String   @id @default(cuid())
+  userId            String?
+  title             String
+  comment           String
+  story             String?
+  actionType        String
+  recordDate        DateTime
+  style             String
+  originalImageUrl  String
+  generatedImageUrl String
+  flowers           Json
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  user              User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([recordDate])
+  @@index([actionType])
+}
+
+model User {
+  id              String              @id @default(cuid())
+  email           String              @unique
+  displayName     String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  records         FlowerRecord[]
+  sessions        Session[]
+  emailChallenges EmailLoginChallenge[]
+}
+
+model EmailLoginChallenge {
+  id          String    @id @default(cuid())
+  email       String
+  codeHash    String
+  expiresAt   DateTime
+  consumedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  userId      String?
+  user        User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([email])
+  @@index([expiresAt])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
