@@ -4,6 +4,7 @@ dist
 coverage
 .env
 .env.local
+.vercel-env-*.tmp
 tsconfig.tsbuildinfo
 *.db
 *.db-journal
@@ -11,3 +12,5 @@ public/uploads/original/*
 public/uploads/generated/*
 !public/uploads/original/.gitkeep
 !public/uploads/generated/.gitkeep
+
+.vercel
