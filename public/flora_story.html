@@ -1226,8 +1226,8 @@
                 body: formData
             });
             const data = await readApiJson(response, '图片上传失败。');
-            appState.uploadedImageUrl = data.url;
-            return data.url;
+            appState.uploadedImageUrl = data.publicUrl || data.url;
+            return appState.uploadedImageUrl;
         }
 
         function normalizeApiRecord(apiRecord) {
