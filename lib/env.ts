@@ -1,6 +1,12 @@
-export type AiProvider = "mock" | "ark";
+export type AiProvider = "mock" | "ark" | "openai";
 export type StorageProvider = "local" | "r2" | "cloudinary";
 export type EmailProvider = "mock" | "resend";
+
+function readAiProvider(): AiProvider {
+  if (process.env.AI_PROVIDER === "ark") return "ark";
+  if (process.env.AI_PROVIDER === "openai" || process.env.AI_PROVIDER === "gpt") return "openai";
+  return "mock";
+}
 
 function readStorageProvider(): StorageProvider {
   if (process.env.STORAGE_PROVIDER === "r2") return "r2";
@@ -8,14 +14,25 @@ function readStorageProvider(): StorageProvider {
   return "local";
 }
 
+function readOpenAiBaseUrl() {
+  const baseUrl = (process.env.OPENAI_BASE_URL || process.env.GPT_BASE_URL || "https://api.openai.com/v1")
+    .replace(/\/+$/, "");
+  return baseUrl.endsWith("/v1") ? baseUrl : `${baseUrl}/v1`;
+}
+
 export const env = {
-  aiProvider: (process.env.AI_PROVIDER === "ark" ? "ark" : "mock") as AiProvider,
+  aiProvider: readAiProvider(),
   storageProvider: readStorageProvider(),
   emailProvider: (process.env.EMAIL_PROVIDER === "resend" ? "resend" : "mock") as EmailProvider,
   arkApiKey: process.env.ARK_API_KEY || "",
   arkBaseUrl: process.env.ARK_BASE_URL || "https://ark.cn-beijing.volces.com/api/v3",
   arkImageModel: process.env.ARK_IMAGE_MODEL || "doubao-seedream-5-0-260128",
   arkVisionModel: process.env.ARK_VISION_MODEL || "doubao-seed-2-0-lite-260428",
+  openAiBaseUrl: readOpenAiBaseUrl(),
+  openAiImageApiKey: process.env.OPENAI_IMAGE_API_KEY || process.env.GPT_IMAGE_API_KEY || process.env.OPENAI_API_KEY || "",
+  openAiVisionApiKey: process.env.OPENAI_VISION_API_KEY || process.env.GPT_VISION_API_KEY || process.env.OPENAI_API_KEY || "",
+  openAiImageModel: process.env.OPENAI_IMAGE_MODEL || process.env.GPT_IMAGE_MODEL || "gpt-image-2",
+  openAiVisionModel: process.env.OPENAI_VISION_MODEL || process.env.GPT_VISION_MODEL || "gpt-5.4-mini",
   publicAppUrl: (process.env.PUBLIC_APP_URL || "http://127.0.0.1:3000").replace(/\/$/, ""),
   r2AccountId: process.env.R2_ACCOUNT_ID || "",
   r2AccessKeyId: process.env.R2_ACCESS_KEY_ID || "",
@@ -34,6 +51,18 @@ export const env = {
 export function assertArkReady() {
   if (!env.arkApiKey) {
     throw new Error("ARK_API_KEY is required when AI_PROVIDER=ark.");
+  }
+}
+
+export function assertOpenAiVisionReady() {
+  if (!env.openAiVisionApiKey) {
+    throw new Error("OPENAI_VISION_API_KEY is required when AI_PROVIDER=openai.");
+  }
+}
+
+export function assertOpenAiImageReady() {
+  if (!env.openAiImageApiKey) {
+    throw new Error("OPENAI_IMAGE_API_KEY is required when AI_PROVIDER=openai.");
   }
 }
 

@@ -36,10 +36,13 @@ export async function GET(request: Request) {
   const year = searchParams.get("year");
   const actionType = searchParams.get("actionType");
   const user = await getCurrentUser();
+  if (!user) {
+    return NextResponse.json({ records: [] });
+  }
 
   const records = await prisma.flowerRecord.findMany({
     where: {
-      ...(user ? { userId: user.id } : {}),
+      userId: user.id,
       ...(actionType && actionType !== "all" ? { actionType } : {}),
       ...(year && year !== "all"
         ? {
@@ -60,9 +63,13 @@ export async function POST(request: Request) {
   try {
     const input = saveRecordRequestSchema.parse(await request.json());
     const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "请先登录后再保存花束。" }, { status: 401 });
+    }
+
     const record = await prisma.flowerRecord.create({
       data: {
-        userId: user?.id,
+        userId: user.id,
         title: input.title,
         comment: input.comment,
         story: input.story || null,

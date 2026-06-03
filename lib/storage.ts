@@ -233,6 +233,50 @@ export async function mirrorRemoteImageToStorage(remoteUrl: string) {
   return `/${relativePath.replace(/\\/g, "/")}`;
 }
 
+export async function saveGeneratedImageBuffer(input: {
+  buffer: Buffer;
+  mimeType?: string;
+}) {
+  const mimeType = input.mimeType || "image/png";
+
+  if (env.storageProvider === "r2") {
+    const saved = await uploadBufferToR2({
+      folder: "generated",
+      buffer: input.buffer,
+      mimeType
+    });
+    return saved.url;
+  }
+
+  if (env.storageProvider === "cloudinary") {
+    const saved = await uploadBufferToCloudinary({
+      folder: "generated",
+      buffer: input.buffer,
+      mimeType
+    });
+    return saved.url;
+  }
+
+  const key = createObjectKey("generated", mimeType);
+  const relativePath = key.replace(/^uploads\//, "uploads/");
+  const dir = path.join(process.cwd(), "public", "uploads", "generated");
+  await mkdir(dir, { recursive: true });
+  await writeFile(path.join(process.cwd(), "public", relativePath), input.buffer);
+  return `/${relativePath.replace(/\\/g, "/")}`;
+}
+
+export async function saveGeneratedImageDataUrl(dataUrl: string) {
+  const match = dataUrl.match(/^data:([^;,]+);base64,(.+)$/);
+  if (!match) {
+    throw new Error("生成图片不是有效的 base64 data URL。");
+  }
+
+  return saveGeneratedImageBuffer({
+    mimeType: match[1],
+    buffer: Buffer.from(match[2], "base64")
+  });
+}
+
 export async function localImageUrlToDataUrl(url: string) {
   const filePath = localFilePathFromUrl(url);
   if (!filePath) return null;

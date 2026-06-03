@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getCurrentUser } from "@/lib/auth";
 import { saveUploadedImage } from "@/lib/storage";
 
 export const runtime = "nodejs";
@@ -6,6 +7,11 @@ export const maxDuration = 60;
 
 export async function POST(request: Request) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "请先登录后再上传花束照片。" }, { status: 401 });
+    }
+
     const formData = await request.formData();
     const file = formData.get("file");
     if (!(file instanceof File)) {

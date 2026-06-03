@@ -10,9 +10,13 @@ type FlowerDetail = {
 
 export async function GET() {
   const user = await getCurrentUser();
+  if (!user) {
+    return NextResponse.json({ flowers: [] });
+  }
+
   const records = await prisma.flowerRecord.findMany({
     where: {
-      ...(user ? { userId: user.id } : {})
+      userId: user.id
     },
     select: { flowers: true }
   });

@@ -1126,6 +1126,18 @@
             }
         }
 
+        function requireLogin(message = '请先点击右上角 Login 登录。') {
+            if (appState.currentUser) return true;
+            const panel = document.getElementById('auth-panel');
+            const emailInput = document.getElementById('auth-email-input');
+            if (panel) panel.classList.remove('hidden');
+            if (emailInput) {
+                window.setTimeout(() => emailInput.focus(), 80);
+            }
+            showToast(message);
+            return false;
+        }
+
         function toggleAuthPanel() {
             const panel = document.getElementById('auth-panel');
             if (!panel) return;
@@ -1209,14 +1221,20 @@
                 await fetch('/api/auth/logout', { method: 'POST' });
             } finally {
                 appState.currentUser = null;
+                appState.records = [];
+                closeWizard();
+                closeFlowerDetail();
                 renderAuthState();
                 document.getElementById('auth-panel').classList.add('hidden');
-                await loadRecordsFromApi();
+                renderTimelineRecords();
+                renderStatsSummary();
+                renderFloraBook();
                 showToast('已退出登录。');
             }
         }
 
         async function uploadPhotoIfNeeded() {
+            if (!requireLogin()) throw new Error('请先登录后再上传花束照片。');
             if (appState.uploadedImageUrl) return appState.uploadedImageUrl;
             if (!appState.photoFile) throw new Error('先选一张花束照片吧。');
             const formData = new FormData();
@@ -1250,6 +1268,13 @@
         }
 
         async function loadRecordsFromApi() {
+            if (!appState.currentUser) {
+                appState.records = [];
+                renderTimelineRecords();
+                renderStatsSummary();
+                renderFloraBook();
+                return;
+            }
             const response = await fetch('/api/records?year=all&actionType=all');
             const data = await readApiJson(response, '花历加载失败。');
             appState.records = (data.records || []).map(normalizeApiRecord);
@@ -1262,7 +1287,11 @@
             try {
                 await loadRecordsFromApi();
             } catch (error) {
-                showToast(error.message || '花历加载失败。');
+                if (appState.currentUser) {
+                    showToast(error.message || '花历加载失败。');
+                } else {
+                    appState.records = [];
+                }
                 renderTimelineRecords();
                 renderStatsSummary();
                 renderFloraBook();
@@ -1291,6 +1320,7 @@
         }
 
         async function generateRecordFromApi() {
+            if (!requireLogin()) throw new Error('请先登录后再生成花束。');
             const originalImageUrl = await uploadPhotoIfNeeded();
             const storyInput = document.getElementById('wizard-story-input').value.trim();
             const response = await fetch('/api/ai/generate-record', {
@@ -1427,6 +1457,7 @@
         }
 
         function openWizard() {
+            if (!requireLogin()) return;
             resetWizard();
             document.getElementById('wizard-overlay').classList.add('active');
             goToStep(1);
@@ -1691,6 +1722,7 @@
 
         async function deleteTimelineRecord(recordId, event) {
             if (event) event.stopPropagation();
+            if (!requireLogin()) return;
             const record = appState.records.find(item => item.id === recordId || item.localId === recordId);
             if (!record) return;
             if (!window.confirm(`删除「${record.title}」吗？`)) return;
@@ -1713,6 +1745,7 @@
 
         async function downloadTimelineCard(recordId, event) {
             if (event) event.stopPropagation();
+            if (!requireLogin()) return;
             const record = appState.records.find(item => item.id === recordId || item.localId === recordId);
             try {
                 await downloadRecordCard(record);
@@ -1724,6 +1757,7 @@
 
         async function downloadDetailCard(event) {
             if (event) event.stopPropagation();
+            if (!requireLogin()) return;
             const record = appState.detailRecord && appState.records.find(item =>
                 item.id === appState.detailRecord.id || item.localId === appState.detailRecord.localId
             );
@@ -1737,6 +1771,7 @@
 
         async function deleteDetailRecord(event) {
             if (event) event.stopPropagation();
+            if (!requireLogin()) return;
             if (!appState.detailRecord) return;
             await deleteTimelineRecord(appState.detailRecord.id || appState.detailRecord.localId, event);
             closeFlowerDetail();
@@ -1788,6 +1823,7 @@
         }
         
         async function startLoading() {
+            if (!requireLogin()) return;
             if (!appState.photoDataUrl) {
                 showToast('先选一张花束照片吧。');
                 return;
@@ -1823,6 +1859,7 @@
         }
 
         async function retryGeneration() {
+            if (!requireLogin()) return;
             if (!appState.photoDataUrl) {
                 showToast('先选一张花束照片吧。');
                 return;
@@ -1928,6 +1965,7 @@
 
         async function saveGeneratedRecord() {
             if (!appState.generatedRecord) return;
+            if (!requireLogin()) return;
             try {
                 const record = appState.generatedRecord;
                 const response = await fetch('/api/records', {
@@ -2341,7 +2379,7 @@
             });
         }
 
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', async () => {
             updateDateLabels();
             bindUploadInput();
             bindStoryCounter();
@@ -2351,8 +2389,8 @@
             bindFilters();
             bindAuthDismiss();
             renderRomanticQuote();
-            loadCurrentUser();
-            reloadRecordsQuietly();
+            await loadCurrentUser();
+            await reloadRecordsQuietly();
         });
     </script>
 </body>

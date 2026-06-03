@@ -8,6 +8,7 @@ const port = 3100;
 const baseUrl = `http://127.0.0.1:${port}`;
 let savedRecordId = "";
 let uploadedFileUrl = "";
+let legacyPublicRecordId = "";
 const testEmail = `flora-test-${Date.now()}@example.com`;
 
 function sleep(ms) {
@@ -29,6 +30,14 @@ async function readJson(response, label) {
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw new Error(`${label} failed: ${response.status} ${JSON.stringify(data)}`);
+  }
+  return data;
+}
+
+async function expectStatus(response, expectedStatus, label) {
+  const data = await response.json().catch(() => ({}));
+  if (response.status !== expectedStatus) {
+    throw new Error(`${label} expected ${expectedStatus}, got ${response.status}: ${JSON.stringify(data)}`);
   }
   return data;
 }
@@ -75,6 +84,66 @@ try {
   const page = await fetch(`${baseUrl}/flora_story.html`);
   if (!page.ok) throw new Error(`frontend page failed: ${page.status}`);
 
+  const prismaForIsolation = new PrismaClient();
+  const legacyRecord = await prismaForIsolation.flowerRecord.create({
+    data: {
+      title: "Legacy Public Test",
+      comment: "should stay hidden",
+      story: "unauthenticated visibility regression guard",
+      actionType: "received",
+      recordDate: new Date("2026-06-01T00:00:00.000Z"),
+      style: "original",
+      originalImageUrl: "/uploads/original/legacy-test.jpg",
+      generatedImageUrl: "/uploads/original/legacy-test.jpg",
+      flowers: [{ name: "测试花", meaning: "只用于隔离测试" }]
+    }
+  });
+  legacyPublicRecordId = legacyRecord.id;
+  await prismaForIsolation.$disconnect();
+
+  const unauthRecords = await readJson(await fetch(`${baseUrl}/api/records?year=all&actionType=all`), "list records without login");
+  if ((unauthRecords.records || []).length !== 0) {
+    throw new Error(`unauthenticated list leaked records: ${JSON.stringify(unauthRecords.records)}`);
+  }
+
+  const unauthFloraBook = await readJson(await fetch(`${baseUrl}/api/flora-book`), "flora book without login");
+  if ((unauthFloraBook.flowers || []).length !== 0) {
+    throw new Error(`unauthenticated flora book leaked flowers: ${JSON.stringify(unauthFloraBook.flowers)}`);
+  }
+
+  await expectStatus(await fetch(`${baseUrl}/api/uploads`, {
+    method: "POST",
+    body: new FormData()
+  }), 401, "upload without login");
+
+  await expectStatus(await fetch(`${baseUrl}/api/ai/generate-record`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      originalImageUrl: "/uploads/original/legacy-test.jpg",
+      actionType: "received",
+      recordDate: "2026-06-01",
+      story: "未登录测试",
+      style: "watercolor"
+    })
+  }), 401, "generate without login");
+
+  await expectStatus(await fetch(`${baseUrl}/api/records`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: "未登录保存",
+      comment: "should fail",
+      story: "",
+      actionType: "received",
+      recordDate: "2026-06-01",
+      style: "original",
+      originalImageUrl: "/uploads/original/legacy-test.jpg",
+      generatedImageUrl: "/uploads/original/legacy-test.jpg",
+      flower_details: [{ name: "测试花", meaning: "只用于隔离测试" }]
+    })
+  }), 401, "save without login");
+
   const cookieJar = new Map();
   const requestCode = await readJson(await fetch(`${baseUrl}/api/auth/request-code`, {
     method: "POST",
@@ -110,13 +179,14 @@ try {
   formData.append("file", createTinyPngFile());
   const upload = await readJson(await fetch(`${baseUrl}/api/uploads`, {
     method: "POST",
-    body: formData
+    body: formData,
+    headers: authHeaders
   }), "upload");
   uploadedFileUrl = upload.url;
 
   const generated = await readJson(await fetch(`${baseUrl}/api/ai/generate-record`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders },
     body: JSON.stringify({
       originalImageUrl: upload.url,
       actionType: "received",
@@ -183,6 +253,7 @@ try {
     savedRecordId: saved.record.id,
     recordCount: records.records.length,
     floraCount: floraBook.flowers.length,
+    unauthIsolation: "ok",
     deleteApi: "ok"
   }, null, 2));
 } catch (error) {
@@ -201,6 +272,9 @@ try {
   }
   try {
     const prisma = new PrismaClient();
+    if (legacyPublicRecordId) {
+      await prisma.flowerRecord.deleteMany({ where: { id: legacyPublicRecordId } });
+    }
     await prisma.user.deleteMany({ where: { email: testEmail } });
     await prisma.$disconnect();
   } catch (error) {
