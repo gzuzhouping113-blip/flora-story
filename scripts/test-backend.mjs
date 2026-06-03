@@ -8,7 +8,7 @@ const port = 3100;
 const baseUrl = `http://127.0.0.1:${port}`;
 let savedRecordId = "";
 let uploadedFileUrl = "";
-let legacyPublicRecordId = "";
+let otherUserEmail = "";
 const testEmail = `flora-test-${Date.now()}@example.com`;
 
 function sleep(ms) {
@@ -84,21 +84,25 @@ try {
   const page = await fetch(`${baseUrl}/flora_story.html`);
   if (!page.ok) throw new Error(`frontend page failed: ${page.status}`);
 
+  otherUserEmail = `flora-other-${Date.now()}@example.com`;
   const prismaForIsolation = new PrismaClient();
-  const legacyRecord = await prismaForIsolation.flowerRecord.create({
+  const otherUser = await prismaForIsolation.user.create({
+    data: { email: otherUserEmail }
+  });
+  await prismaForIsolation.flowerRecord.create({
     data: {
-      title: "Legacy Public Test",
+      userId: otherUser.id,
+      title: "Other User Hidden Test",
       comment: "should stay hidden",
-      story: "unauthenticated visibility regression guard",
+      story: "cross user visibility regression guard",
       actionType: "received",
       recordDate: new Date("2026-06-01T00:00:00.000Z"),
       style: "original",
       originalImageUrl: "/uploads/original/legacy-test.jpg",
       generatedImageUrl: "/uploads/original/legacy-test.jpg",
-      flowers: [{ name: "测试花", meaning: "只用于隔离测试" }]
+      flowers: [{ name: "Test flower", meaning: "Only for isolation test" }]
     }
   });
-  legacyPublicRecordId = legacyRecord.id;
   await prismaForIsolation.$disconnect();
 
   const unauthRecords = await readJson(await fetch(`${baseUrl}/api/records?year=all&actionType=all`), "list records without login");
@@ -140,7 +144,7 @@ try {
       style: "original",
       originalImageUrl: "/uploads/original/legacy-test.jpg",
       generatedImageUrl: "/uploads/original/legacy-test.jpg",
-      flower_details: [{ name: "测试花", meaning: "只用于隔离测试" }]
+      flower_details: [{ name: "Test flower", meaning: "Only for isolation test" }]
     })
   }), 401, "save without login");
 
@@ -219,6 +223,10 @@ try {
   const records = await readJson(await fetch(`${baseUrl}/api/records?year=2026&actionType=all`, {
     headers: authHeaders
   }), "list records");
+  if (records.records?.some(record => record.title === "Other User Hidden Test")) {
+    throw new Error("logged-in user can see another user's record.");
+  }
+
   const floraBook = await readJson(await fetch(`${baseUrl}/api/flora-book`, {
     headers: authHeaders
   }), "flora book");
@@ -272,8 +280,8 @@ try {
   }
   try {
     const prisma = new PrismaClient();
-    if (legacyPublicRecordId) {
-      await prisma.flowerRecord.deleteMany({ where: { id: legacyPublicRecordId } });
+    if (otherUserEmail) {
+      await prisma.user.deleteMany({ where: { email: otherUserEmail } });
     }
     await prisma.user.deleteMany({ where: { email: testEmail } });
     await prisma.$disconnect();

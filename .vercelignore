@@ -1,0 +1,14 @@
+.env
+.env.*
+!.env.example
+.vercel-env-*.tmp
+node_modules
+.next
+dist
+coverage
+*.db
+*.db-journal
+public/uploads/original/*
+public/uploads/generated/*
+!public/uploads/original/.gitkeep
+!public/uploads/generated/.gitkeep
