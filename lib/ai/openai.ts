@@ -14,6 +14,34 @@ import {
 
 type JsonObject = Record<string, unknown>;
 
+const flowerAnalysisJsonSchema = {
+  name: "flower_analysis",
+  strict: true,
+  schema: {
+    type: "object",
+    additionalProperties: false,
+    required: ["flower_details", "comment", "title"],
+    properties: {
+      flower_details: {
+        type: "array",
+        minItems: 1,
+        maxItems: 5,
+        items: {
+          type: "object",
+          additionalProperties: false,
+          required: ["name", "meaning"],
+          properties: {
+            name: { type: "string", minLength: 1, maxLength: 24 },
+            meaning: { type: "string", minLength: 1, maxLength: 40 }
+          }
+        }
+      },
+      comment: { type: "string", minLength: 1, maxLength: 40 },
+      title: { type: "string", minLength: 1, maxLength: 12 }
+    }
+  }
+};
+
 function absoluteImageUrl(url: string) {
   if (/^https?:\/\//i.test(url) || url.startsWith("data:")) return url;
   return `${env.publicAppUrl}${url.startsWith("/") ? url : `/${url}`}`;
@@ -47,24 +75,42 @@ function parseLooseJson(text: string) {
 }
 
 function extractResponseText(data: unknown): string {
+  if (typeof data === "string") return data;
+
   const obj = data as {
     output_text?: string;
+    text?: string;
+    content?: string;
+    result?: string;
+    raw?: string;
     output?: Array<{
-      content?: Array<{ text?: string; type?: string }>;
+      content?: Array<{ text?: string; type?: string; content?: string }>;
     }>;
     choices?: Array<{
-      message?: { content?: string | Array<{ text?: string; type?: string }> };
+      text?: string;
+      message?: { content?: string | Array<{ text?: string; type?: string; content?: string }> };
     }>;
   };
 
   if (obj.output_text) return obj.output_text;
-  const outputText = obj.output?.flatMap(item => item.content || []).map(item => item.text).filter(Boolean).join("");
+  if (obj.text) return obj.text;
+  if (obj.content) return obj.content;
+  if (obj.result) return obj.result;
+  if (obj.raw) return obj.raw;
+
+  const outputText = obj.output
+    ?.flatMap(item => item.content || [])
+    .map(item => item.text || item.content)
+    .filter(Boolean)
+    .join("");
   if (outputText) return outputText;
+
+  if (obj.choices?.[0]?.text) return obj.choices[0].text;
 
   const content = obj.choices?.[0]?.message?.content;
   if (typeof content === "string") return content;
   if (Array.isArray(content)) {
-    return content.map(item => item.text || "").join("");
+    return content.map(item => item.text || item.content || "").join("");
   }
 
   throw new Error("Vision model returned empty content.");
@@ -129,6 +175,28 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 1, delayMs = 1200) {
   throw lastError;
 }
 
+async function withVisionRetry<T>(label: string, fn: () => Promise<T>, retries = 3, delayMs = 900) {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      const message = error instanceof Error ? error.message : String(error);
+      const isUnsupportedFormat = /response_format|json_schema|unsupported|not support/i.test(message)
+        && /failed:\s*4\d\d|400|422/i.test(message);
+      if (attempt >= retries || isUnsupportedFormat) break;
+      await new Promise(resolve => setTimeout(resolve, delayMs * (attempt + 1)));
+    }
+  }
+  const message = lastError instanceof Error ? lastError.message : String(lastError);
+  throw new Error(`${label}: ${message}`);
+}
+
+async function parseVisionPayload(payload: unknown) {
+  return aiAnalysisSchema.parse(parseLooseJson(extractResponseText(payload)));
+}
+
 function parseDataUrl(dataUrl: string) {
   const match = dataUrl.match(/^data:([^;,]+);base64,(.+)$/);
   if (!match) return null;
@@ -185,58 +253,104 @@ export async function analyzeBouquetWithOpenAI(input: GenerateRecordRequest): Pr
     story: input.story
   });
   const imageUrl = await openAiImageInput(input.originalImageUrl);
+  const chatMessages = [
+    {
+      role: "user",
+      content: [
+        { type: "text", text: prompt },
+        { type: "image_url", image_url: { url: imageUrl, detail: "high" } }
+      ]
+    }
+  ];
+  const responsesInput = [
+    {
+      role: "user",
+      content: [
+        { type: "input_image", image_url: imageUrl, detail: "high" },
+        { type: "input_text", text: prompt }
+      ]
+    }
+  ];
 
-  const responsesBody = {
-    model: env.openAiVisionModel,
-    input: [
-      {
-        role: "user",
-        content: [
-          { type: "input_image", image_url: imageUrl, detail: "high" },
-          { type: "input_text", text: prompt }
-        ]
-      }
-    ],
-    text: { format: { type: "json_object" } }
-  };
-
-  try {
-    const raw = await withRetry(() => fetchJsonWithTimeout({
-      url: `${env.openAiBaseUrl}/responses`,
-      apiKey: env.openAiVisionApiKey,
-      body: responsesBody,
-      timeoutMs: 90_000
-    }), 7, 800);
-    return aiAnalysisSchema.parse(parseLooseJson(extractResponseText(raw)));
-  } catch (responsesError) {
-    const chatBody = {
-      model: env.openAiVisionModel,
-      messages: [
-        {
-          role: "user",
-          content: [
-            { type: "text", text: prompt },
-            { type: "image_url", image_url: { url: imageUrl, detail: "high" } }
-          ]
-        }
-      ],
-      response_format: { type: "json_object" }
-    };
-
-    try {
-      const raw = await withRetry(() => fetchJsonWithTimeout({
+  const attempts: Array<{ label: string; run: () => Promise<AiAnalysis> }> = [
+    {
+      label: "chat/completions json_schema",
+      run: async () => parseVisionPayload(await fetchJsonWithTimeout({
         url: `${env.openAiBaseUrl}/chat/completions`,
         apiKey: env.openAiVisionApiKey,
-        body: chatBody,
+        body: {
+          model: env.openAiVisionModel,
+          messages: chatMessages,
+          response_format: {
+            type: "json_schema",
+            json_schema: flowerAnalysisJsonSchema
+          }
+        },
         timeoutMs: 90_000
-      }));
-      return aiAnalysisSchema.parse(parseLooseJson(extractResponseText(raw)));
-    } catch (chatError) {
-      const first = responsesError instanceof Error ? responsesError.message : String(responsesError);
-      const second = chatError instanceof Error ? chatError.message : String(chatError);
-      throw new Error(`GPT vision failed: ${first}; ${second}`);
+      }))
+    },
+    {
+      label: "chat/completions json_object",
+      run: async () => parseVisionPayload(await fetchJsonWithTimeout({
+        url: `${env.openAiBaseUrl}/chat/completions`,
+        apiKey: env.openAiVisionApiKey,
+        body: {
+          model: env.openAiVisionModel,
+          messages: chatMessages,
+          response_format: { type: "json_object" }
+        },
+        timeoutMs: 90_000
+      }))
+    },
+    {
+      label: "chat/completions plain",
+      run: async () => parseVisionPayload(await fetchJsonWithTimeout({
+        url: `${env.openAiBaseUrl}/chat/completions`,
+        apiKey: env.openAiVisionApiKey,
+        body: {
+          model: env.openAiVisionModel,
+          messages: chatMessages
+        },
+        timeoutMs: 90_000
+      }))
+    },
+    {
+      label: "responses json_object",
+      run: async () => parseVisionPayload(await fetchJsonWithTimeout({
+        url: `${env.openAiBaseUrl}/responses`,
+        apiKey: env.openAiVisionApiKey,
+        body: {
+          model: env.openAiVisionModel,
+          input: responsesInput,
+          text: { format: { type: "json_object" } }
+        },
+        timeoutMs: 90_000
+      }))
+    },
+    {
+      label: "responses plain",
+      run: async () => parseVisionPayload(await fetchJsonWithTimeout({
+        url: `${env.openAiBaseUrl}/responses`,
+        apiKey: env.openAiVisionApiKey,
+        body: {
+          model: env.openAiVisionModel,
+          input: responsesInput
+        },
+        timeoutMs: 90_000
+      }))
+    }
+  ];
+
+  const errors: string[] = [];
+  for (const attempt of attempts) {
+    try {
+      return await withVisionRetry(attempt.label, attempt.run, 3, 900);
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : String(error));
     }
   }
+
+  throw new Error(`GPT vision failed: ${errors.join(" | ")}`);
 }
 
 export async function generateImageWithOpenAI(input: {
