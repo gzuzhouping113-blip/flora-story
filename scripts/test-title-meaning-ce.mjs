@@ -198,13 +198,13 @@ try {
     const authoritativeMatches = generated.meaningAuthoritativeMatches || 0;
     const validMeanings = (generated.flower_details || []).filter(flower => {
       return flower.name === "红玫瑰"
-        ? flower.meaning === "热恋、我爱你"
+        ? flower.meaning === "热恋把我爱你说出口"
         : flower.name === "满天星"
-          ? flower.meaning === "真心喜欢"
+          ? flower.meaning === "真心喜欢藏在星河里"
           : flower.name === "小苍兰"
-            ? flower.meaning === "纯洁、幸福"
+            ? flower.meaning === "纯洁幸福带着清甜香气"
             : flower.name === "尤加利叶"
-              ? flower.meaning === "恩赐、回忆"
+              ? flower.meaning === "恩赐与回忆被轻轻收藏"
               : true;
     }).length;
     results.push({
