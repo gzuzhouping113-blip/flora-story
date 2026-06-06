@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, withTransientDatabaseRetry } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { cleanFlowerName } from "@/lib/validation";
 
@@ -14,12 +14,12 @@ export async function GET() {
     return NextResponse.json({ flowers: [] });
   }
 
-  const records = await prisma.flowerRecord.findMany({
+  const records = await withTransientDatabaseRetry(() => prisma.flowerRecord.findMany({
     where: {
       userId: user.id
     },
     select: { flowers: true }
-  });
+  }));
 
   const stats = new Map<string, { name: string; meaning: string; count: number }>();
   records.forEach(record => {

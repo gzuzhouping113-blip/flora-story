@@ -126,6 +126,7 @@ async function uploadBufferToR2(input: {
     url: publicR2Url(key),
     publicUrl: publicR2Url(key),
     fileName: path.basename(key),
+    storageProvider: "r2",
     key
   };
 }
@@ -148,6 +149,7 @@ async function uploadBufferToCloudinary(input: {
     url: result.secure_url,
     publicUrl: result.secure_url,
     fileName: `${publicId}.${extensionFromMime(input.mimeType)}`,
+    storageProvider: "cloudinary",
     key: result.public_id
   };
 }
@@ -166,6 +168,7 @@ async function saveUploadedImageLocal(file: File) {
     url: `/${relativePath.replace(/\\/g, "/")}`,
     publicUrl: `${env.publicAppUrl}/${relativePath.replace(/\\/g, "/")}`,
     fileName: path.basename(key),
+    storageProvider: "local",
     key
   };
 }

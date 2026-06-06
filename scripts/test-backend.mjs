@@ -1,5 +1,4 @@
 import { spawn } from "node:child_process";
-import { createHash } from "node:crypto";
 import { rm } from "node:fs/promises";
 import path from "node:path";
 import { PrismaClient } from "@prisma/client";
@@ -10,9 +9,27 @@ let savedRecordId = "";
 let uploadedFileUrl = "";
 let otherUserEmail = "";
 const testEmail = `flora-test-${Date.now()}@example.com`;
+const testPassword = "flora-test-123456";
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function withRetry(label, fn) {
+  let lastError;
+  for (let attempt = 1; attempt <= 5; attempt += 1) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      const message = error instanceof Error ? error.message : String(error);
+      if (!/P1001|P1002|Can't reach database server|Timed out fetching a new connection|ECONNRESET|ETIMEDOUT|ENOTFOUND|Connection terminated/i.test(message)) {
+        break;
+      }
+      await sleep(1000 * attempt);
+    }
+  }
+  throw lastError;
 }
 
 async function waitForServer() {
@@ -49,10 +66,6 @@ function createTinyPngFile() {
   return new File([buffer], "flower-test.png", { type: "image/png" });
 }
 
-function sha256(value) {
-  return createHash("sha256").update(value).digest("hex");
-}
-
 const nextCli = path.join(process.cwd(), "node_modules", "next", "dist", "bin", "next");
 const child = spawn(
   process.execPath,
@@ -62,7 +75,6 @@ const child = spawn(
     env: {
       ...process.env,
       AI_PROVIDER: "mock",
-      EMAIL_PROVIDER: "mock",
       STORAGE_PROVIDER: "local",
       PUBLIC_APP_URL: baseUrl
     },
@@ -78,6 +90,24 @@ child.stderr.on("data", chunk => {
   output += chunk.toString();
 });
 
+async function stopTestServer() {
+  if (!child.pid || child.exitCode !== null) return;
+
+  if (process.platform === "win32") {
+    await new Promise(resolve => {
+      const killer = spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"], {
+        stdio: "ignore",
+        windowsHide: true
+      });
+      killer.on("exit", resolve);
+      killer.on("error", resolve);
+    });
+    return;
+  }
+
+  child.kill("SIGTERM");
+}
+
 try {
   await waitForServer();
 
@@ -86,10 +116,10 @@ try {
 
   otherUserEmail = `flora-other-${Date.now()}@example.com`;
   const prismaForIsolation = new PrismaClient();
-  const otherUser = await prismaForIsolation.user.create({
+  const otherUser = await withRetry("create isolation user", () => prismaForIsolation.user.create({
     data: { email: otherUserEmail }
-  });
-  await prismaForIsolation.flowerRecord.create({
+  }));
+  await withRetry("create isolation record", () => prismaForIsolation.flowerRecord.create({
     data: {
       userId: otherUser.id,
       title: "Other User Hidden Test",
@@ -102,7 +132,7 @@ try {
       generatedImageUrl: "/uploads/original/legacy-test.jpg",
       flowers: [{ name: "Test flower", meaning: "Only for isolation test" }]
     }
-  });
+  }));
   await prismaForIsolation.$disconnect();
 
   const unauthRecords = await readJson(await fetch(`${baseUrl}/api/records?year=all&actionType=all`), "list records without login");
@@ -149,39 +179,37 @@ try {
   }), 401, "save without login");
 
   const cookieJar = new Map();
-  const requestCode = await readJson(await fetch(`${baseUrl}/api/auth/request-code`, {
+  const registerResponse = await fetch(`${baseUrl}/api/auth/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: testEmail })
-  }), "request login code");
-
-  const prismaForCode = new PrismaClient();
-  const challenge = await prismaForCode.emailLoginChallenge.findFirst({
-    where: { email: requestCode.email },
-    orderBy: { createdAt: "desc" }
+    body: JSON.stringify({ email: testEmail, password: testPassword })
   });
-  if (!challenge) throw new Error("login challenge was not created.");
-  await prismaForCode.emailLoginChallenge.update({
-    where: { id: challenge.id },
-    data: { codeHash: sha256("123456") }
-  });
-  await prismaForCode.$disconnect();
-
-  const loginResponse = await fetch(`${baseUrl}/api/auth/verify-code`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: testEmail, code: "123456" })
-  });
-  const setCookie = loginResponse.headers.get("set-cookie");
+  let setCookie = registerResponse.headers.get("set-cookie");
   if (setCookie) cookieJar.set("cookie", setCookie.split(";")[0]);
-  const login = await readJson(loginResponse, "verify login code");
+  const register = await readJson(registerResponse, "register");
+  if (!register.user?.email) throw new Error("register did not return user.");
+
+  await readJson(await fetch(`${baseUrl}/api/auth/logout`, {
+    method: "POST",
+    headers: cookieJar.get("cookie") ? { Cookie: cookieJar.get("cookie") } : {}
+  }), "logout after register");
+  cookieJar.clear();
+
+  const loginResponse = await fetch(`${baseUrl}/api/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: testEmail, password: testPassword })
+  });
+  setCookie = loginResponse.headers.get("set-cookie");
+  if (setCookie) cookieJar.set("cookie", setCookie.split(";")[0]);
+  const login = await readJson(loginResponse, "login with password");
   if (!login.user?.email) throw new Error("login did not return user.");
 
   const authHeaders = cookieJar.get("cookie") ? { Cookie: cookieJar.get("cookie") } : {};
 
   const formData = new FormData();
   formData.append("file", createTinyPngFile());
-  const upload = await readJson(await fetch(`${baseUrl}/api/uploads`, {
+    const upload = await readJson(await fetch(`${baseUrl}/api/uploads`, {
     method: "POST",
     body: formData,
     headers: authHeaders
@@ -272,7 +300,7 @@ try {
   if (savedRecordId) {
     try {
       const prisma = new PrismaClient();
-      await prisma.flowerRecord.deleteMany({ where: { id: savedRecordId } });
+      await withRetry("cleanup saved record", () => prisma.flowerRecord.deleteMany({ where: { id: savedRecordId } }));
       await prisma.$disconnect();
     } catch (error) {
       console.error("cleanup failed:", error);
@@ -281,9 +309,18 @@ try {
   try {
     const prisma = new PrismaClient();
     if (otherUserEmail) {
-      await prisma.user.deleteMany({ where: { email: otherUserEmail } });
+      await withRetry("cleanup isolation user", () => prisma.user.deleteMany({ where: { email: otherUserEmail } }));
     }
-    await prisma.user.deleteMany({ where: { email: testEmail } });
+    await withRetry("cleanup test user", () => prisma.user.deleteMany({ where: { email: testEmail } }));
+    await withRetry("cleanup test rate limits", () => prisma.rateLimitEvent.deleteMany({
+      where: {
+        OR: [
+          { bucket: { contains: "flora-test-" } },
+          { bucket: { contains: "flora-other-" } },
+          { bucket: { contains: "unknown" } }
+        ]
+      }
+    }));
     await prisma.$disconnect();
   } catch (error) {
     console.error("user cleanup failed:", error);
@@ -299,5 +336,5 @@ try {
       console.error("upload cleanup failed:", error);
     }
   }
-  child.kill();
+  await stopTestServer();
 }

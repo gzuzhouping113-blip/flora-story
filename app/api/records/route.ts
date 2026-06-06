@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, withTransientDatabaseRetry } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { assertOwnedUpload, markAssetsUsed } from "@/lib/security";
 import { saveRecordRequestSchema } from "@/lib/validation";
 
 function toClientRecord(record: {
@@ -40,7 +41,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ records: [] });
   }
 
-  const records = await prisma.flowerRecord.findMany({
+  const records = await withTransientDatabaseRetry(() => prisma.flowerRecord.findMany({
     where: {
       userId: user.id,
       ...(actionType && actionType !== "all" ? { actionType } : {}),
@@ -54,7 +55,7 @@ export async function GET(request: Request) {
         : {})
     },
     orderBy: { recordDate: "desc" }
-  });
+  }));
 
   return NextResponse.json({ records: records.map(toClientRecord) });
 }
@@ -66,8 +67,10 @@ export async function POST(request: Request) {
     if (!user) {
       return NextResponse.json({ error: "请先登录后再保存花束。" }, { status: 401 });
     }
+    await assertOwnedUpload(user.id, input.originalImageUrl, ["original"]);
+    await assertOwnedUpload(user.id, input.generatedImageUrl, ["original", "generated"]);
 
-    const record = await prisma.flowerRecord.create({
+    const record = await withTransientDatabaseRetry(() => prisma.flowerRecord.create({
       data: {
         userId: user.id,
         title: input.title,
@@ -80,7 +83,8 @@ export async function POST(request: Request) {
         generatedImageUrl: input.generatedImageUrl,
         flowers: input.flower_details
       }
-    });
+    }));
+    await markAssetsUsed(user.id, [input.originalImageUrl, input.generatedImageUrl]);
 
     return NextResponse.json({ record: toClientRecord(record) }, { status: 201 });
   } catch (error) {

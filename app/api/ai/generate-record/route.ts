@@ -4,6 +4,8 @@ import { analyzeBouquetWithArk, generateImageWithArk } from "@/lib/ai/ark";
 import { analyzeBouquetWithOpenAI, generateImageWithOpenAI } from "@/lib/ai/openai";
 import { mockAnalyzeBouquet, mockGeneratedImage } from "@/lib/ai/mock";
 import { getCurrentUser } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { assertOwnedUpload, assertRateLimit, clientIpFromRequest } from "@/lib/security";
 import { generateRecordRequestSchema } from "@/lib/validation";
 
 export const runtime = "nodejs";
@@ -27,6 +29,21 @@ export async function POST(request: Request) {
     }
 
     const input = generateRecordRequestSchema.parse(await request.json());
+    const ip = clientIpFromRequest(request);
+    await assertRateLimit({
+      bucket: `ai:user:${user.id}`,
+      limit: 20,
+      windowSeconds: 24 * 60 * 60,
+      message: "今天生成次数有点多了，明天再继续种花吧。"
+    });
+    await assertRateLimit({
+      bucket: `ai:ip:${ip}`,
+      limit: 60,
+      windowSeconds: 24 * 60 * 60,
+      message: "当前网络生成次数较多，请稍后再试。"
+    });
+    await assertOwnedUpload(user.id, input.originalImageUrl, ["original"]);
+
     const analysisPromise = env.aiProvider === "ark"
       ? analyzeBouquetWithArk(input)
       : env.aiProvider === "openai"
@@ -64,6 +81,24 @@ export async function POST(request: Request) {
           failed: true,
           error: imageResult.reason instanceof Error ? imageResult.reason.message : String(imageResult.reason)
         };
+
+    if (!image.failed && image.url !== input.originalImageUrl) {
+      await prisma.uploadAsset.upsert({
+        where: { url: image.url },
+        update: {
+          userId: user.id,
+          kind: "generated",
+          status: "uploaded"
+        },
+        create: {
+          userId: user.id,
+          url: image.url,
+          storageProvider: env.storageProvider,
+          kind: "generated",
+          status: "uploaded"
+        }
+      });
+    }
 
     return NextResponse.json({
       ...analysis,

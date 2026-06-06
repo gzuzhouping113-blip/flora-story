@@ -204,6 +204,13 @@
             border-radius: 22px;
             padding: 10px;
         }
+        #timeline-container.empty-state-active {
+            min-height: clamp(260px, 42svh, 380px);
+            justify-content: center;
+        }
+        #timeline-empty {
+            margin-top: clamp(12px, 3svh, 34px);
+        }
         .record-compressed {
             margin-top: -104px;
         }
@@ -250,6 +257,63 @@
             -webkit-line-clamp: 2;
             -webkit-box-orient: vertical;
             overflow: hidden;
+        }
+        .ai-progress-panel {
+            width: min(100%, 300px);
+            margin-top: 24px;
+        }
+        .ai-progress-track {
+            height: 6px;
+            border-radius: 999px;
+            overflow: hidden;
+            background: rgba(210, 165, 179, 0.22);
+            box-shadow: inset 0 1px 2px rgba(166, 118, 132, 0.08);
+        }
+        .ai-progress-fill {
+            width: 12%;
+            height: 100%;
+            border-radius: inherit;
+            background: linear-gradient(90deg, #D2A5B3, #A67684);
+            transition: width 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .ai-progress-copy {
+            min-height: 40px;
+            margin-top: 12px;
+            text-align: center;
+        }
+        .ai-progress-title {
+            display: block;
+            font-size: 12px;
+            font-weight: 800;
+            color: #1D1D1F;
+        }
+        .ai-progress-detail {
+            display: block;
+            margin-top: 4px;
+            font-size: 11px;
+            line-height: 1.5;
+            color: #86868B;
+        }
+        .ai-progress-dots {
+            display: flex;
+            justify-content: center;
+            gap: 7px;
+            margin-top: 12px;
+        }
+        .ai-progress-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 999px;
+            background: rgba(210, 165, 179, 0.28);
+            transition: transform 0.25s ease, background 0.25s ease;
+        }
+        .ai-progress-dot.active {
+            background: #A67684;
+            transform: scale(1.25);
+        }
+        #generated-preview {
+            opacity: 0;
+            transition: opacity 0.18s ease;
         }
         .flora-page-button {
             width: 26px;
@@ -433,11 +497,12 @@
     </button>
 
     <div id="auth-panel" class="auth-panel px-4 py-3 hidden">
-        <div id="auth-signed-out" class="flex items-center gap-2">
-            <input id="auth-email-input" type="email" inputmode="email" autocomplete="email" placeholder="邮箱" class="min-w-0 flex-1 rounded-full border border-primary-light/70 bg-white px-3 py-2 text-xs outline-none focus:border-primary">
-            <input id="auth-code-input" type="text" inputmode="numeric" maxlength="6" placeholder="验证码" class="hidden w-24 rounded-full border border-primary-light/70 bg-white px-3 py-2 text-xs outline-none focus:border-primary">
-            <button id="auth-send-button" type="button" onclick="requestLoginCode()" class="rounded-full bg-[#1D1D1F] px-3 py-2 text-xs font-bold text-white">获取</button>
-            <button id="auth-login-button" type="button" onclick="verifyLoginCode()" class="hidden rounded-full bg-primary px-3 py-2 text-xs font-bold text-white">登录</button>
+        <p id="auth-helper-text" class="mb-2 px-1 text-[10px] font-medium text-[#86868B]">新用户先注册，老用户直接登录。</p>
+        <div id="auth-signed-out" class="grid grid-cols-2 gap-2">
+            <input id="auth-email-input" type="email" inputmode="email" autocomplete="email" placeholder="邮箱" class="min-w-0 rounded-full border border-primary-light/70 bg-white px-3 py-2 text-xs outline-none focus:border-primary">
+            <input id="auth-password-input" type="password" autocomplete="current-password" placeholder="密码" class="min-w-0 rounded-full border border-primary-light/70 bg-white px-3 py-2 text-xs outline-none focus:border-primary">
+            <button id="auth-login-button" type="button" onclick="loginUser()" class="rounded-full bg-[#1D1D1F] px-3 py-2 text-xs font-bold text-white">登录</button>
+            <button id="auth-register-button" type="button" onclick="registerUser()" class="rounded-full bg-white px-3 py-2 text-xs font-bold text-primary-dark border border-primary-light/70">注册</button>
         </div>
         <div id="auth-signed-in" class="hidden items-center justify-between gap-3">
             <p class="min-w-0 truncate text-xs font-bold text-[#1D1D1F]">已登录 <span id="auth-user-email" class="text-primary-dark"></span></p>
@@ -688,12 +753,22 @@
                 <div id="step-3" class="absolute inset-0 flex flex-col items-center justify-center bg-[#F5F5F7] transition-all duration-500 opacity-0 z-10 hidden">
                     <div class="w-16 h-16 rounded-full border-4 border-primary-light border-t-primary animate-spin mb-8"></div>
                     <h3 id="loading-text" class="text-lg font-serif font-bold text-primary-dark tracking-wider transition-opacity duration-300">正在提取花香...</h3>
+                    <div class="ai-progress-panel">
+                        <div class="ai-progress-track" aria-hidden="true">
+                            <div id="ai-progress-fill" class="ai-progress-fill"></div>
+                        </div>
+                        <div class="ai-progress-copy">
+                            <span id="ai-progress-title" class="ai-progress-title">正在看清这束花</span>
+                            <span id="ai-progress-detail" class="ai-progress-detail">先把照片交给模型理解，确认主体和颜色。</span>
+                        </div>
+                        <div id="ai-progress-dots" class="ai-progress-dots" aria-hidden="true"></div>
+                    </div>
                 </div>
 
                 <div id="step-4" class="absolute w-full px-6 left-full transition-all duration-500 opacity-0 pb-10">
                     <div class="bg-white rounded-3xl p-4 shadow-sm border border-gray-100 mb-6 mt-4">
                         <div class="relative mx-auto mb-3 aspect-[3/4] w-full max-w-[380px] max-h-[58vh] overflow-hidden rounded-2xl bg-[#F8F6F4] shadow-sm">
-                            <img id="generated-preview" src="https://images.unsplash.com/photo-1526047932273-341f2a7631f9?auto=format&fit=crop&q=80&w=600" class="w-full h-full object-contain" alt="Generated">
+                            <img id="generated-preview" class="w-full h-full object-contain" alt="Generated">
                             <button id="peek-original-button" type="button" class="absolute left-2 top-2 rounded-full bg-white/90 px-3 py-1 text-[10px] font-bold text-primary-dark shadow-sm backdrop-blur">按住看原图</button>
                             <span id="generated-style-label" class="absolute right-2 top-2 rounded-full bg-[#1D1D1F]/70 px-2.5 py-1 text-[10px] font-bold text-white shadow-sm">治愈水彩</span>
                         </div>
@@ -809,8 +884,36 @@
             "AI 园丁正在修剪枝叶...",
             "正在为你写下这束花的注脚..."
         ];
+        const aiProgressSteps = [
+            {
+                title: '正在看清这束花',
+                detail: '先把照片交给模型理解，确认主体和颜色。',
+                progress: 18
+            },
+            {
+                title: '正在识别主要花材',
+                detail: '找出最重要的花朵，整理花名和花语。',
+                progress: 42
+            },
+            {
+                title: '正在按风格重绘',
+                detail: '生成你选择的水彩、贴纸或拍立得画面。',
+                progress: 68
+            },
+            {
+                title: '正在写标题和锐评',
+                detail: '把故事、日期和花材揉成一句好懂的话。',
+                progress: 86
+            },
+            {
+                title: '正在收尾整理',
+                detail: '把图片和文案放进卡片，马上就好。',
+                progress: 96
+            }
+        ];
 
         let floraPages = [[]];
+        let generatedPreviewLoadToken = 0;
 
         function escapeHtml(value) {
             return String(value ?? '')
@@ -915,13 +1018,124 @@
             return String(value || fallback).replace(/[\\/:*?"<>|]/g, '-').slice(0, 32) || fallback;
         }
 
+        function displayImageUrl(src) {
+            if (!src) return '';
+            if (src.startsWith('data:') || src.startsWith('blob:') || src.startsWith('/')) return src;
+
+            try {
+                const url = new URL(src, window.location.origin);
+                if (url.origin === window.location.origin) {
+                    return `${url.pathname}${url.search}${url.hash}`;
+                }
+                return `/api/image-proxy?url=${encodeURIComponent(url.href)}`;
+            } catch {
+                return src;
+            }
+        }
+
+        function setImageSource(image, src, fallbackSrc = '') {
+            if (!image) return;
+            const nextSrc = displayImageUrl(src);
+            const fallback = displayImageUrl(fallbackSrc);
+            image.onerror = () => {
+                if (fallback && image.src !== fallback) {
+                    image.onerror = null;
+                    image.src = fallback;
+                }
+            };
+            image.src = nextSrc || fallback;
+        }
+
+        function setGeneratedPreviewPlaceholder(src = '') {
+            const preview = document.getElementById('generated-preview');
+            if (!preview) return;
+            generatedPreviewLoadToken += 1;
+            preview.onload = null;
+            preview.onerror = null;
+            preview.style.opacity = '0';
+
+            const placeholder = displayImageUrl(src);
+            if (!placeholder) {
+                preview.removeAttribute('src');
+                return;
+            }
+
+            preview.onload = () => {
+                preview.style.opacity = '1';
+            };
+            preview.onerror = () => {
+                preview.style.opacity = '0';
+                preview.removeAttribute('src');
+            };
+            preview.src = placeholder;
+            if (placeholder.startsWith('data:')) {
+                preview.style.opacity = '1';
+            }
+        }
+
+        function preloadGeneratedPreview(src, fallbackSrc = '') {
+            const preview = document.getElementById('generated-preview');
+            if (!preview) return;
+
+            const token = generatedPreviewLoadToken + 1;
+            generatedPreviewLoadToken = token;
+            const nextSrc = displayImageUrl(src);
+            const fallback = displayImageUrl(fallbackSrc);
+
+            preview.onload = null;
+            preview.onerror = null;
+            preview.style.opacity = '0';
+            preview.removeAttribute('src');
+
+            if (fallback) {
+                preview.onload = () => {
+                    if (generatedPreviewLoadToken === token) preview.style.opacity = '1';
+                };
+                preview.onerror = null;
+                preview.src = fallback;
+                if (fallback.startsWith('data:')) preview.style.opacity = '1';
+            }
+
+            if (!nextSrc || nextSrc === fallback) return;
+
+            const loader = new Image();
+            loader.crossOrigin = 'anonymous';
+            loader.onload = () => {
+                if (generatedPreviewLoadToken !== token) return;
+                preview.style.opacity = '0';
+                preview.onload = () => {
+                    if (generatedPreviewLoadToken === token) preview.style.opacity = '1';
+                };
+                preview.onerror = () => {
+                    if (generatedPreviewLoadToken !== token) return;
+                    if (fallback) {
+                        preview.src = fallback;
+                        preview.style.opacity = '1';
+                    } else {
+                        preview.removeAttribute('src');
+                    }
+                };
+                requestAnimationFrame(() => {
+                    if (generatedPreviewLoadToken === token) preview.src = nextSrc;
+                });
+            };
+            loader.onerror = () => {
+                if (generatedPreviewLoadToken !== token) return;
+                if (fallback) {
+                    preview.src = fallback;
+                    preview.style.opacity = '1';
+                }
+            };
+            loader.src = nextSrc;
+        }
+
         function loadDrawableImage(src) {
             return new Promise(resolve => {
                 const image = new Image();
                 image.crossOrigin = 'anonymous';
                 image.onload = () => resolve(image);
                 image.onerror = () => resolve(null);
-                image.src = src;
+                image.src = displayImageUrl(src);
             });
         }
 
@@ -974,13 +1188,24 @@
             if (!record) return;
             const scale = 3;
             const width = 516;
-            const height = 960;
             const padding = 34;
             const cardX = 54;
             const cardY = 38;
             const cardWidth = width - cardX * 2;
-            const cardHeight = height - 76;
+            const story = String(record.story || '').trim();
+            const hasStory = story.length > 0;
+            const storyTextWidth = cardWidth - padding * 2 - 28;
+            const storyFontSize = story.length > 150 ? 14 : story.length > 90 ? 16 : 18;
+            const storyLineHeight = storyFontSize + 8;
+            const footerGap = hasStory ? 72 : 34;
             const canvas = document.createElement('canvas');
+            const measureContext = canvas.getContext('2d');
+            measureContext.font = `${storyFontSize}px "Noto Serif SC", serif`;
+            const storyLines = hasStory ? getWrappedLines(measureContext, story, storyTextWidth) : [];
+            const storyBoxHeight = hasStory ? Math.max(78, storyLines.length * storyLineHeight + 28) : 0;
+            const baseHeight = hasStory ? 960 : 812;
+            const height = Math.max(baseHeight, hasStory ? 850 + storyBoxHeight : baseHeight);
+            const cardHeight = height - 76;
             canvas.width = width * scale;
             canvas.height = height * scale;
             const context = canvas.getContext('2d');
@@ -1055,28 +1280,27 @@
             });
             textY += chipTags.length ? 58 : 16;
 
-            const story = record.story || '那天忘了写下故事，但花香依然记得。';
-            context.textBaseline = 'alphabetic';
-            context.fillStyle = '#86868B';
-            context.font = 'bold 13px Arial, sans-serif';
-            context.fillText('这一天的故事', textX, textY);
-            textY += 18;
+            if (hasStory) {
+                context.textBaseline = 'alphabetic';
+                context.fillStyle = '#86868B';
+                context.font = 'bold 13px Arial, sans-serif';
+                context.fillText('这一天的故事', textX, textY);
+                textY += 18;
 
-            const storyBoxX = textX;
-            const storyBoxY = textY;
-            const storyBoxWidth = cardWidth - padding * 2;
-            const storyMaxLines = 5;
-            context.font = '18px "Noto Serif SC", serif';
-            const storyLines = getWrappedLines(context, story, storyBoxWidth - 28, storyMaxLines);
-            const storyBoxHeight = Math.max(92, storyLines.length * 27 + 28);
-            context.fillStyle = '#F8F8F9';
-            roundedRect(context, storyBoxX, storyBoxY, storyBoxWidth, storyBoxHeight, 18);
-            context.fill();
-            context.fillStyle = '#1D1D1F';
-            context.textBaseline = 'alphabetic';
-            storyLines.forEach((lineText, index) => {
-                context.fillText(lineText, storyBoxX + 14, storyBoxY + 30 + index * 27);
-            });
+                const storyBoxX = textX;
+                const storyBoxY = textY;
+                const storyBoxWidth = cardWidth - padding * 2;
+                context.fillStyle = '#F8F8F9';
+                roundedRect(context, storyBoxX, storyBoxY, storyBoxWidth, storyBoxHeight, 18);
+                context.fill();
+                context.fillStyle = '#1D1D1F';
+                context.textBaseline = 'alphabetic';
+                context.font = `${storyFontSize}px "Noto Serif SC", serif`;
+                storyLines.forEach((lineText, index) => {
+                    context.fillText(lineText, storyBoxX + 14, storyBoxY + 28 + index * storyLineHeight);
+                });
+                textY = storyBoxY + storyBoxHeight + footerGap;
+            }
 
             context.fillStyle = '#C7C7CC';
             context.font = 'bold 11px Arial, sans-serif';
@@ -1110,6 +1334,7 @@
             const signedOut = document.getElementById('auth-signed-out');
             const signedIn = document.getElementById('auth-signed-in');
             const emailLabel = document.getElementById('auth-user-email');
+            const helper = document.getElementById('auth-helper-text');
             if (!panel || !signedOut || !signedIn) return;
             if (trigger) {
                 trigger.querySelector('span').innerText = appState.currentUser ? 'Account' : 'Login';
@@ -1118,15 +1343,17 @@
                 signedOut.classList.add('hidden');
                 signedIn.classList.remove('hidden');
                 signedIn.classList.add('flex');
+                if (helper) helper.classList.add('hidden');
                 emailLabel.innerText = appState.currentUser.email;
             } else {
                 signedOut.classList.remove('hidden');
                 signedIn.classList.add('hidden');
                 signedIn.classList.remove('flex');
+                if (helper) helper.classList.remove('hidden');
             }
         }
 
-        function requireLogin(message = '请先点击右上角 Login 登录。') {
+        function requireLogin(message = '请先点击右上角 Login 登录；新用户先注册。') {
             if (appState.currentUser) return true;
             const panel = document.getElementById('auth-panel');
             const emailInput = document.getElementById('auth-email-input');
@@ -1165,55 +1392,134 @@
             renderAuthState();
         }
 
-        async function requestLoginCode() {
+        function readAuthCredentials() {
             const emailInput = document.getElementById('auth-email-input');
-            const codeInput = document.getElementById('auth-code-input');
-            const sendButton = document.getElementById('auth-send-button');
-            const loginButton = document.getElementById('auth-login-button');
+            const passwordInput = document.getElementById('auth-password-input');
             const email = emailInput.value.trim();
-            if (!email) {
-                showToast('先输入邮箱。');
-                return;
+            const password = passwordInput.value;
+            return { email, password, emailInput, passwordInput };
+        }
+
+        function setAuthBusy(isBusy) {
+            ['auth-login-button', 'auth-register-button'].forEach(id => {
+                const button = document.getElementById(id);
+                if (button) button.disabled = isBusy;
+            });
+        }
+
+        function clearGeneratedPreview() {
+            const preview = document.getElementById('generated-preview');
+            const styleLabel = document.getElementById('generated-style-label');
+            const title = document.getElementById('generated-title');
+            const comment = document.getElementById('generated-comment');
+            const tags = document.getElementById('generated-tags');
+            const storyContainer = document.getElementById('wizard-story-container');
+            if (appState.photoDataUrl) {
+                setGeneratedPreviewPlaceholder(appState.photoDataUrl);
+            } else if (preview) {
+                generatedPreviewLoadToken += 1;
+                preview.style.opacity = '0';
+                preview.removeAttribute('src');
             }
-            sendButton.disabled = true;
-            try {
-                await readApiJson(await fetch('/api/auth/request-code', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email })
-                }), '验证码发送失败。');
-                codeInput.classList.remove('hidden');
-                loginButton.classList.remove('hidden');
-                codeInput.focus();
-                showToast('验证码已发送。');
-            } catch (error) {
-                showToast(error.message || '验证码发送失败。');
-            } finally {
-                sendButton.disabled = false;
+            if (styleLabel) styleLabel.innerText = '生成中';
+            if (title) title.innerText = '正在生成';
+            if (comment) comment.innerText = '“这束花正在慢慢成形。”';
+            if (tags) tags.innerHTML = '';
+            if (storyContainer) storyContainer.classList.add('hidden');
+        }
+
+        function setAiProgress(index) {
+            const safeIndex = Math.min(Math.max(index, 0), aiProgressSteps.length - 1);
+            const step = aiProgressSteps[safeIndex];
+            const fill = document.getElementById('ai-progress-fill');
+            const title = document.getElementById('ai-progress-title');
+            const detail = document.getElementById('ai-progress-detail');
+            const dots = document.getElementById('ai-progress-dots');
+            if (fill) fill.style.width = `${step.progress}%`;
+            if (title) title.innerText = step.title;
+            if (detail) detail.innerText = step.detail;
+            if (dots) {
+                dots.innerHTML = aiProgressSteps.map((_, dotIndex) =>
+                    `<span class="ai-progress-dot ${dotIndex <= safeIndex ? 'active' : ''}"></span>`
+                ).join('');
             }
         }
 
-        async function verifyLoginCode() {
-            const email = document.getElementById('auth-email-input').value.trim();
-            const code = document.getElementById('auth-code-input').value.trim();
-            if (!email || !code) {
-                showToast('请输入邮箱和验证码。');
+        function beginGenerationLoading(text = loadingTexts[0]) {
+            appState.generatedRecord = null;
+            appState.lastFailedRecord = null;
+            clearGeneratedPreview();
+            goToStep(3);
+            const textEl = document.getElementById('loading-text');
+            textEl.innerText = text;
+            textEl.style.opacity = '1';
+            setAiProgress(0);
+
+            let currentTextIndex = 0;
+            let currentProgressIndex = 0;
+            const textTimer = setInterval(() => {
+                textEl.style.opacity = '0';
+                setTimeout(() => {
+                    currentTextIndex = (currentTextIndex + 1) % loadingTexts.length;
+                    textEl.innerText = loadingTexts[currentTextIndex];
+                    textEl.style.opacity = '1';
+                }, 300);
+            }, 1600);
+            const progressTimer = setInterval(() => {
+                currentProgressIndex = Math.min(currentProgressIndex + 1, aiProgressSteps.length - 1);
+                setAiProgress(currentProgressIndex);
+            }, 6500);
+
+            return () => {
+                clearInterval(textTimer);
+                clearInterval(progressTimer);
+                setAiProgress(aiProgressSteps.length - 1);
+            };
+        }
+
+        async function submitPasswordAuth(endpoint, successMessage, fallbackMessage) {
+            const { email, password, emailInput, passwordInput } = readAuthCredentials();
+            if (!email) {
+                showToast('先输入邮箱。');
+                emailInput.focus();
                 return;
             }
+            if (!password) {
+                showToast('请输入密码。');
+                passwordInput.focus();
+                return;
+            }
+            setAuthBusy(true);
             try {
-                const data = await readApiJson(await fetch('/api/auth/verify-code', {
+                const data = await readApiJson(await fetch(endpoint, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, code })
-                }), '登录失败。');
+                    body: JSON.stringify({ email, password })
+                }), fallbackMessage);
                 appState.currentUser = data.user;
                 renderAuthState();
                 document.getElementById('auth-panel').classList.add('hidden');
                 await loadRecordsFromApi();
-                showToast('已经登录。');
+                showToast(successMessage);
             } catch (error) {
-                showToast(error.message || '登录失败。');
+                showToast(error.message || fallbackMessage);
+            } finally {
+                setAuthBusy(false);
             }
+        }
+
+        async function loginUser() {
+            await submitPasswordAuth('/api/auth/login', '已经登录。', '登录失败。');
+        }
+
+        async function registerUser() {
+            const { password, passwordInput } = readAuthCredentials();
+            if (password && password.length < 6) {
+                showToast('密码至少需要 6 位。');
+                passwordInput.focus();
+                return;
+            }
+            await submitPasswordAuth('/api/auth/register', '注册成功，已经登录。', '注册失败。');
         }
 
         async function logoutUser() {
@@ -1335,6 +1641,9 @@
                 })
             });
             const data = await readApiJson(response, 'AI 生成失败。');
+            if (data.imageGenerationFailed && appState.visualStyle !== 'original') {
+                showToast('生图暂时没成功，先展示原图，可以继续重试。');
+            }
             const flowerDetails = data.flower_details || [];
             return ensureLocalId({
                 title: data.title,
@@ -1482,6 +1791,8 @@
             document.getElementById('upload-preview').classList.add('hidden');
             document.getElementById('upload-change-chip').classList.add('hidden');
             document.getElementById('upload-placeholder').classList.remove('hidden');
+            clearGeneratedPreview();
+            setAiProgress(0);
             updateNextButton();
             updateDateLabels();
             selectActionType('received');
@@ -1817,8 +2128,10 @@
                 record.classList.toggle('record-compressed', index > 0);
             });
             const empty = document.getElementById('timeline-empty');
-            empty.classList.toggle('hidden', visibleRecords.length > 0);
-            empty.style.display = visibleRecords.length > 0 ? 'none' : '';
+            const isEmpty = visibleRecords.length === 0;
+            empty.classList.toggle('hidden', !isEmpty);
+            empty.style.display = isEmpty ? '' : 'none';
+            document.getElementById('timeline-container').classList.toggle('empty-state-active', isEmpty);
             setTimeout(initScrollAnimations, 80);
         }
         
@@ -1828,27 +2141,16 @@
                 showToast('先选一张花束照片吧。');
                 return;
             }
-            goToStep(3); 
-            const textEl = document.getElementById('loading-text');
-            let currentIndex = 0;
-            
-            const interval = setInterval(() => {
-                textEl.style.opacity = '0';
-                setTimeout(() => {
-                    currentIndex = (currentIndex + 1) % loadingTexts.length;
-                    textEl.innerText = loadingTexts[currentIndex];
-                    textEl.style.opacity = '1';
-                }, 300);
-            }, 1200);
+            const finishLoading = beginGenerationLoading();
 
             try {
                 appState.generatedRecord = await generateRecordFromApi();
-                clearInterval(interval);
+                finishLoading();
                 document.getElementById('step-3').classList.add('hidden');
                 renderGeneratedResult();
                 goToStep(4);
             } catch (error) {
-                clearInterval(interval);
+                finishLoading();
                 document.getElementById('step-3').classList.add('hidden');
                 appState.generatedRecord = buildFallbackRecord(error.message || '生成失败，可以重试。');
                 appState.lastFailedRecord = appState.generatedRecord;
@@ -1864,16 +2166,16 @@
                 showToast('先选一张花束照片吧。');
                 return;
             }
-            goToStep(3);
-            const textEl = document.getElementById('loading-text');
-            textEl.innerText = '正在重新生成...';
+            const finishLoading = beginGenerationLoading('正在重新生成...');
             try {
                 appState.generatedRecord = await generateRecordFromApi();
                 appState.lastFailedRecord = null;
+                finishLoading();
                 document.getElementById('step-3').classList.add('hidden');
                 renderGeneratedResult();
                 goToStep(4);
             } catch (error) {
+                finishLoading();
                 appState.generatedRecord = buildFallbackRecord(error.message || '生成失败，可以重试。');
                 appState.lastFailedRecord = appState.generatedRecord;
                 document.getElementById('step-3').classList.add('hidden');
@@ -1888,7 +2190,11 @@
             if (!record) return;
             const preview = document.getElementById('generated-preview');
             const label = document.getElementById('generated-style-label');
-            preview.src = useOriginal ? appState.photoDataUrl : record.image;
+            if (useOriginal) {
+                setGeneratedPreviewPlaceholder(appState.photoDataUrl);
+            } else {
+                preloadGeneratedPreview(record.image, appState.photoDataUrl);
+            }
             if (label) label.innerText = useOriginal ? '原图预览' : styleTag(record.style, record.generatedImageUrl, record.originalImageUrl);
         }
 
@@ -1896,7 +2202,7 @@
             const record = appState.generatedRecord;
             if (!record) return;
 
-            document.getElementById('generated-preview').src = record.image;
+            preloadGeneratedPreview(record.image, appState.photoDataUrl);
             document.getElementById('generated-style-label').innerText = styleTag(record.style, record.generatedImageUrl, record.originalImageUrl);
             document.getElementById('generated-title').innerText = record.title;
             document.getElementById('generated-comment').innerText = `“${record.comment}”`;
@@ -2006,7 +2312,7 @@
             const actionColor = record.actionType === 'received' ? 'bg-primary/90' : 'bg-[#86868B]/80';
             const dateText = `${String(record.date.getMonth() + 1).padStart(2, '0')}.${String(record.date.getDate()).padStart(2, '0')}`;
             const flowerMarkup = flowerStripMarkup(record.tags);
-            const imageSrc = escapeHtml(record.image);
+            const imageSrc = escapeHtml(displayImageUrl(record.image));
             const safeTitle = escapeHtml(record.title);
             const safeComment = escapeHtml(record.comment);
             const domId = recordIdForDom(record);
@@ -2054,7 +2360,7 @@
             appState.detailRecord = { title, image: imageSrc, id: meta.id, localId: meta.localId };
             document.getElementById('detail-title').innerText = title;
             document.getElementById('detail-comment').innerText = comment;
-            document.getElementById('detail-image').src = imageSrc;
+            setImageSource(document.getElementById('detail-image'), imageSrc);
             document.getElementById('detail-style').innerText = styleTag(meta.style || 'original', meta.generatedImageUrl || imageSrc, meta.originalImageUrl || imageSrc);
             const detailMeta = document.getElementById('detail-meta');
             if (meta.date || meta.action) {
@@ -2170,7 +2476,7 @@
                 button.style.zIndex = String(10 + index);
                 button.setAttribute('aria-label', `查看${record.title}`);
                 button.innerHTML = `
-                    <img src="${escapeHtml(record.image)}" alt="${escapeHtml(record.title)}" class="bouquet-image">
+                    <img src="${escapeHtml(displayImageUrl(record.image))}" alt="${escapeHtml(record.title)}" class="bouquet-image">
                 `;
                 button.addEventListener('click', () => jumpToRecord(recordIdForDom(record)));
                 strip.appendChild(button);

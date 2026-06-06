@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, withTransientDatabaseRetry } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { deleteStoredImages } from "@/lib/storage";
+import { deleteUnusedUploadAssets } from "@/lib/security";
 
 export async function DELETE(
   _request: Request,
@@ -15,7 +15,7 @@ export async function DELETE(
       return NextResponse.json({ error: "请先登录后再删除记录。" }, { status: 401 });
     }
 
-    const record = await prisma.flowerRecord.findFirst({
+    const record = await withTransientDatabaseRetry(() => prisma.flowerRecord.findFirst({
       where: {
         id,
         userId: user.id
@@ -24,28 +24,15 @@ export async function DELETE(
         originalImageUrl: true,
         generatedImageUrl: true
       }
-    });
+    }));
 
     if (!record) {
       return NextResponse.json({ error: "记录不存在或无权删除。" }, { status: 404 });
     }
 
-    await prisma.flowerRecord.delete({ where: { id } });
+    await withTransientDatabaseRetry(() => prisma.flowerRecord.delete({ where: { id } }));
 
-    const imageUrls = [...new Set([record.originalImageUrl, record.generatedImageUrl])];
-    const orphanedImageUrls = await Promise.all(imageUrls.map(async url => {
-      const stillUsed = await prisma.flowerRecord.count({
-        where: {
-          OR: [
-            { originalImageUrl: url },
-            { generatedImageUrl: url }
-          ]
-        }
-      });
-      return stillUsed === 0 ? url : null;
-    }));
-
-    await deleteStoredImages(orphanedImageUrls);
+    await deleteUnusedUploadAssets(user.id, [record.originalImageUrl, record.generatedImageUrl]);
 
     return NextResponse.json({ ok: true });
   } catch (error) {

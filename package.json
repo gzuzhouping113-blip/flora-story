@@ -13,8 +13,6 @@
     "check:ark": "node scripts/check-ark-config.mjs",
     "check:ark:live": "node scripts/check-ark-live.mjs",
     "check:storage": "node scripts/check-storage-config.mjs",
-    "check:email": "node scripts/check-email-config.mjs",
-    "check:email:live": "node scripts/check-email-live.mjs",
     "build:css": "tailwindcss -c tailwind.config.cjs -i ./styles/tailwind-input.css -o ./public/flora-tailwind.css --minify"
   },
   "dependencies": {

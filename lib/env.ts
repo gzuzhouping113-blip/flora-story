@@ -1,6 +1,5 @@
 export type AiProvider = "mock" | "ark" | "openai";
 export type StorageProvider = "local" | "r2" | "cloudinary";
-export type EmailProvider = "mock" | "resend";
 
 function readAiProvider(): AiProvider {
   if (process.env.AI_PROVIDER === "ark") return "ark";
@@ -23,7 +22,6 @@ function readOpenAiBaseUrl() {
 export const env = {
   aiProvider: readAiProvider(),
   storageProvider: readStorageProvider(),
-  emailProvider: (process.env.EMAIL_PROVIDER === "resend" ? "resend" : "mock") as EmailProvider,
   arkApiKey: process.env.ARK_API_KEY || "",
   arkBaseUrl: process.env.ARK_BASE_URL || "https://ark.cn-beijing.volces.com/api/v3",
   arkImageModel: process.env.ARK_IMAGE_MODEL || "doubao-seedream-5-0-260128",
@@ -42,8 +40,6 @@ export const env = {
   cloudinaryCloudName: process.env.CLOUDINARY_CLOUD_NAME || "",
   cloudinaryApiKey: process.env.CLOUDINARY_API_KEY || "",
   cloudinaryApiSecret: process.env.CLOUDINARY_API_SECRET || "",
-  resendApiKey: process.env.RESEND_API_KEY || "",
-  mailFrom: process.env.MAIL_FROM || "Flora Story <onboarding@resend.dev>",
   authCookieName: process.env.AUTH_COOKIE_NAME || "flora_session",
   sessionDays: Number(process.env.SESSION_DAYS || "30")
 };
@@ -89,20 +85,5 @@ export function assertCloudinaryReady() {
 
   if (missing.length > 0) {
     throw new Error(`Cloudinary storage is not configured. Missing: ${missing.join(", ")}.`);
-  }
-}
-
-export function assertEmailReady() {
-  const missing = [
-    ["RESEND_API_KEY", env.resendApiKey],
-    ["MAIL_FROM", env.mailFrom]
-  ].filter(([, value]) => !value).map(([name]) => name);
-
-  if (missing.length > 0) {
-    throw new Error(`Resend email is not configured. Missing: ${missing.join(", ")}.`);
-  }
-
-  if (process.env.NODE_ENV === "production" && /@resend\.dev>?$/i.test(env.mailFrom.trim())) {
-    throw new Error("Production email must use a sender from your verified domain, not onboarding@resend.dev.");
   }
 }
