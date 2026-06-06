@@ -164,9 +164,9 @@ try {
       },
       {
         userId,
-        flowerName: "尤加利叶",
-        normalizedName: "尤加利叶",
-        meaning: "收藏回忆，也收藏心动"
+        flowerName: "测试花",
+        normalizedName: "测试花",
+        meaning: "用户词库里的专属花语"
       }
     ],
     skipDuplicates: true
@@ -195,22 +195,24 @@ try {
     }), `generate ${i + 1}`);
 
     const maxSimilarity = Math.max(...historicalTitles.map(title => titleSimilarity(generated.title, title)));
-    const exactMeaningMatches = (generated.flower_details || []).filter(flower => {
+    const authoritativeMatches = generated.meaningAuthoritativeMatches || 0;
+    const validMeanings = (generated.flower_details || []).filter(flower => {
       return flower.name === "红玫瑰"
-        ? flower.meaning === "热烈真心，愿爱长久不褪色"
+        ? flower.meaning === "热恋、我爱你"
         : flower.name === "满天星"
-          ? flower.meaning === "细碎温柔，把陪伴写成星河"
+          ? flower.meaning === "真心喜欢"
           : flower.name === "小苍兰"
-            ? flower.meaning === "清甜温柔，像迟来的晚安"
+            ? flower.meaning === "纯洁、幸福"
             : flower.name === "尤加利叶"
-              ? flower.meaning === "收藏回忆，也收藏心动"
+              ? flower.meaning === "恩赐、回忆"
               : true;
     }).length;
     results.push({
       title: generated.title,
       maxSimilarity,
       matchedCount: generated.meaningMemoryMatchedCount,
-      exactMeaningMatches
+      authoritativeMatches,
+      validMeanings
     });
 
     await readJson(await fetch(`${baseUrl}/api/records`, {
@@ -233,15 +235,17 @@ try {
   const maxSimilarity = Math.max(...results.map(result => result.maxSimilarity));
   const overThreshold = results.filter(result => result.maxSimilarity >= 0.8).length;
   const memoryMatchedCases = results.filter(result => result.matchedCount >= 1).length;
-  const exactMeaningCases = results.filter(result => result.exactMeaningMatches >= 1).length;
+  const authoritativeCases = results.filter(result => result.authoritativeMatches >= 1).length;
+  const validMeaningCases = results.filter(result => result.validMeanings >= 1).length;
 
   console.log(JSON.stringify({
-    ok: overThreshold === 0 && memoryMatchedCases === totalCases && exactMeaningCases === totalCases,
+    ok: overThreshold === 0 && memoryMatchedCases === totalCases && authoritativeCases === totalCases && validMeaningCases === totalCases,
     totalCases,
     maxSimilarity,
     overThreshold,
     memoryMatchedCases,
-    exactMeaningCases,
+    authoritativeCases,
+    validMeaningCases,
     sampleTitles: results.slice(0, 8).map(result => result.title)
   }, null, 2));
 

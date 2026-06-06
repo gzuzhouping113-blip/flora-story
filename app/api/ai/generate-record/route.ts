@@ -184,6 +184,7 @@ export async function POST(request: Request) {
       titleSimilarity: auditedAnalysis.titleSimilarity,
       titleRegenerated: auditedAnalysis.titleRegenerated,
       meaningMemoryMatchedCount: meaningResult.matchedCount,
+      meaningAuthoritativeMatches: meaningResult.authoritativeMatches,
       meaningMemoryExactMatches: meaningResult.exactMatches,
       meaningMemoryFuzzyMatches: meaningResult.fuzzyMatches,
       imageGenerationFailed: image.failed,

@@ -10,6 +10,7 @@
     "db:push": "prisma db push",
     "test:backend": "node scripts/test-backend.mjs",
     "test:ce": "node scripts/test-title-meaning-ce.mjs",
+    "test:flower-language": "node scripts/test-flower-language.mjs",
     "test:openai:images": "node scripts/test-openai-generation.mjs",
     "check:ark": "node scripts/check-ark-config.mjs",
     "check:ark:live": "node scripts/check-ark-live.mjs",

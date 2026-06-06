@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { authoritativeFlowerLanguages, flattenFlowerLanguageNames } from "@/lib/flower-language";
 import { cleanFlowerName, type AiAnalysis } from "@/lib/validation";
 
 type FlowerDetail = AiAnalysis["flower_details"][number];
@@ -129,6 +130,36 @@ function isFuzzyNameMatch(a: string, b: string) {
   return left === right || left.includes(right) || right.includes(left) || titleSimilarity(left, right) >= 0.8;
 }
 
+function findAuthoritativeMeaning(name: string) {
+  const normalized = normalizeFlowerName(name);
+  if (!normalized) return null;
+  const candidates = authoritativeFlowerLanguages
+    .map(entry => {
+      let bestScore = 0;
+      for (const candidate of flattenFlowerLanguageNames(entry)) {
+        const normalizedCandidate = normalizeFlowerName(candidate);
+        if (!normalizedCandidate) continue;
+        if (normalized === normalizedCandidate) bestScore = Math.max(bestScore, 1000 + normalizedCandidate.length);
+        else if (normalized.includes(normalizedCandidate)) bestScore = Math.max(bestScore, 700 + normalizedCandidate.length);
+        else if (normalizedCandidate.includes(normalized)) bestScore = Math.max(bestScore, 500 + normalizedCandidate.length);
+        else if (titleSimilarity(normalized, normalizedCandidate) >= 0.86) bestScore = Math.max(bestScore, 300 + normalizedCandidate.length);
+      }
+      return { entry, bestScore };
+    })
+    .filter(candidate => candidate.bestScore > 0)
+    .sort((a, b) => b.bestScore - a.bestScore);
+
+  const best = candidates[0]?.entry;
+  if (best) {
+    return {
+      name: best.name,
+      meaning: best.meaning
+    };
+  }
+
+  return null;
+}
+
 export async function getRecentTitles(userId: string, limit = 30) {
   const records = await prisma.flowerRecord.findMany({
     where: { userId },
@@ -150,10 +181,20 @@ export function applyMeaningMemory(
   flowers: FlowerDetail[],
   memories: Awaited<ReturnType<typeof getMeaningMemory>>
 ) {
+  let authoritativeMatches = 0;
   let exactMatches = 0;
   let fuzzyMatches = 0;
 
   const flowerDetails = flowers.map(flower => {
+    const authoritative = findAuthoritativeMeaning(flower.name);
+    if (authoritative) {
+      authoritativeMatches += 1;
+      return {
+        name: authoritative.name,
+        meaning: authoritative.meaning
+      };
+    }
+
     const normalized = normalizeFlowerName(flower.name);
     const exact = memories.find(memory => memory.normalizedName === normalized);
     const fuzzy = exact ? null : memories.find(memory => isFuzzyNameMatch(flower.name, memory.flowerName));
@@ -173,9 +214,10 @@ export function applyMeaningMemory(
 
   return {
     flower_details: flowerDetails,
+    authoritativeMatches,
     exactMatches,
     fuzzyMatches,
-    matchedCount: exactMatches + fuzzyMatches
+    matchedCount: authoritativeMatches + exactMatches + fuzzyMatches
   };
 }
 
