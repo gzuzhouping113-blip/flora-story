@@ -29,7 +29,7 @@ export async function GET() {
       if (!name) return;
       const current = stats.get(name) || {
         name,
-        meaning: flower.meaning || "一束被认真记住的花",
+        meaning: flower.meaning || "等待重新识别",
         count: 0
       };
       current.count += 1;

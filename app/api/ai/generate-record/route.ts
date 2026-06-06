@@ -19,16 +19,6 @@ import { generateRecordRequestSchema } from "@/lib/validation";
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
-function fallbackAnalysis() {
-  return {
-    flower_details: [
-      { name: "花束", meaning: "一束被认真记住的花" }
-    ],
-    comment: "这束花很会心动",
-    title: "花开此刻"
-  };
-}
-
 async function analyzeWithProvider(input: GenerateRecordRequest & { recentTitles?: string[] }) {
   if (env.aiProvider === "ark") return analyzeBouquetWithArk(input);
   if (env.aiProvider === "openai") return analyzeBouquetWithOpenAI(input);
@@ -131,16 +121,28 @@ export async function POST(request: Request) {
 
     const [analysisResult, imageResult] = await Promise.allSettled([analysisPromise, imagePromise]);
     const analysisFailed = analysisResult.status === "rejected";
-    const auditedAnalysis = analysisFailed
-      ? {
-          analysis: {
-            ...fallbackAnalysis(),
-            title: chooseDistinctFallbackTitle(recentTitles, "花开此刻")
-          },
-          titleSimilarity: maxTitleSimilarity(chooseDistinctFallbackTitle(recentTitles, "花开此刻"), recentTitles),
-          titleRegenerated: false
-        }
-      : analysisResult.value;
+    if (analysisFailed) {
+      const message = analysisResult.reason instanceof Error
+        ? analysisResult.reason.message
+        : String(analysisResult.reason);
+      return NextResponse.json(
+        {
+          error: "花朵识别失败，请重试。",
+          analysisGenerationFailed: true,
+          analysisGenerationError: message,
+          originalImageUrl: input.originalImageUrl,
+          generatedImageUrl: input.originalImageUrl,
+          style: input.style,
+          actionType: input.actionType,
+          recordDate: input.recordDate,
+          story: input.story,
+          provider: env.aiProvider
+        },
+        { status: 502 }
+      );
+    }
+
+    const auditedAnalysis = analysisResult.value;
     const meaningResult = applyMeaningMemory(auditedAnalysis.analysis.flower_details, meaningMemory);
     const analysis = {
       ...auditedAnalysis.analysis,
@@ -189,12 +191,7 @@ export async function POST(request: Request) {
       meaningMemoryFuzzyMatches: meaningResult.fuzzyMatches,
       imageGenerationFailed: image.failed,
       imageGenerationError: image.failed ? image.error : undefined,
-      analysisGenerationFailed: analysisFailed,
-      analysisGenerationError: analysisFailed
-        ? analysisResult.reason instanceof Error
-          ? analysisResult.reason.message
-          : String(analysisResult.reason)
-        : undefined
+      analysisGenerationFailed: false
     });
   } catch (error) {
     console.error("[api/ai/generate-record] failed", error);

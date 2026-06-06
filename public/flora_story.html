@@ -955,7 +955,7 @@
             return (flowers || []).slice(0, 5).map(rawFlower => {
                 const flower = cleanFlowerDetail(rawFlower || {});
                 const name = flower.name || '花材';
-                const meaning = flower.meaning || '一束被认真记住的花';
+                const meaning = flower.meaning || '等待重新识别';
                 return `${flowerIconForName(name)} ${name}：${meaning}`;
             });
         }
@@ -1607,9 +1607,6 @@
         function buildFallbackRecord(message) {
             const originalImageUrl = appState.uploadedImageUrl || appState.photoDataUrl;
             const storyInput = document.getElementById('wizard-story-input').value.trim();
-            const flowerDetails = [
-                { name: '原图', meaning: '生成暂未成功，先保留真实照片' }
-            ];
             return ensureLocalId({
                 title: '原图待生',
                 image: appState.photoDataUrl,
@@ -1618,10 +1615,11 @@
                 actionType: appState.actionType,
                 date: new Date(appState.selectedDate),
                 style: appState.visualStyle,
-                flowerDetails,
-                tags: flowerDetailsToTags(flowerDetails),
+                flowerDetails: [],
+                tags: [],
                 comment: message || '生成没成功，但这束花先被稳稳留住。',
-                story: storyInput
+                story: storyInput,
+                generationFailed: true
             });
         }
 
@@ -1641,6 +1639,9 @@
                 })
             });
             const data = await readApiJson(response, 'AI 生成失败。');
+            if (data.analysisGenerationFailed) {
+                throw new Error('花朵识别失败，请重试。');
+            }
             if (data.imageGenerationFailed && appState.visualStyle !== 'original') {
                 showToast('生图暂时没成功，先展示原图，可以继续重试。');
             }
@@ -2272,6 +2273,10 @@
         async function saveGeneratedRecord() {
             if (!appState.generatedRecord) return;
             if (!requireLogin()) return;
+            if (appState.generatedRecord.generationFailed || !appState.generatedRecord.flowerDetails?.length) {
+                showToast('花朵还没有识别成功，请先重试生成。');
+                return;
+            }
             try {
                 const record = appState.generatedRecord;
                 const response = await fetch('/api/records', {
@@ -2382,7 +2387,7 @@
                 tags.forEach(tag => {
                     const flower = parseFlowerTag(tag);
                     const name = flower.name || '花材';
-                    const meaning = flower.meaning || '一束被认真记住的花';
+                    const meaning = flower.meaning || '等待重新识别';
                     
                     const row = document.createElement('div');
                     row.className = 'flex items-start text-xs';
@@ -2429,7 +2434,7 @@
                     const current = stats.get(name) || {
                         icon: flowerIconForName(name),
                         name,
-                        meaning: flower.meaning || '一束被认真记住的花',
+                        meaning: flower.meaning || '等待重新识别',
                         count: 0
                     };
                     current.count += 1;
