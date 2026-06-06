@@ -44,11 +44,12 @@ function extractResponseText(data: unknown): string {
   throw new Error("豆包视觉模型返回为空。");
 }
 
-export async function analyzeBouquetWithArk(input: GenerateRecordRequest): Promise<AiAnalysis> {
+export async function analyzeBouquetWithArk(input: GenerateRecordRequest & { recentTitles?: string[] }): Promise<AiAnalysis> {
   assertArkReady();
   const prompt = await loadVisionPrompt({
     time: input.recordDate,
-    story: input.story
+    story: input.story,
+    recentTitles: input.recentTitles
   });
   const imageUrl = await arkImageInput(input.originalImageUrl);
 

@@ -246,11 +246,12 @@ async function persistImagePayload(payload: unknown) {
   throw new Error("GPT image API did not return a usable image.");
 }
 
-export async function analyzeBouquetWithOpenAI(input: GenerateRecordRequest): Promise<AiAnalysis> {
+export async function analyzeBouquetWithOpenAI(input: GenerateRecordRequest & { recentTitles?: string[] }): Promise<AiAnalysis> {
   assertOpenAiVisionReady();
   const prompt = await loadVisionPrompt({
     time: input.recordDate,
-    story: input.story
+    story: input.story,
+    recentTitles: input.recentTitles
   });
   const imageUrl = await openAiImageInput(input.originalImageUrl);
   const chatMessages = [

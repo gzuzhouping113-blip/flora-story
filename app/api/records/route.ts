@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser, withTransientDatabaseRetry } from "@/lib/auth";
+import { rememberFlowerMeanings } from "@/lib/flower-memory";
 import { prisma } from "@/lib/prisma";
 import { assertOwnedUpload, markAssetsUsed } from "@/lib/security";
 import { saveRecordRequestSchema } from "@/lib/validation";
@@ -85,6 +86,7 @@ export async function POST(request: Request) {
       }
     }));
     await markAssetsUsed(user.id, [input.originalImageUrl, input.generatedImageUrl]);
+    await rememberFlowerMeanings(user.id, input.flower_details);
 
     return NextResponse.json({ record: toClientRecord(record) }, { status: 201 });
   } catch (error) {

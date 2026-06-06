@@ -4,8 +4,16 @@ import { analyzeBouquetWithArk, generateImageWithArk } from "@/lib/ai/ark";
 import { analyzeBouquetWithOpenAI, generateImageWithOpenAI } from "@/lib/ai/openai";
 import { mockAnalyzeBouquet, mockGeneratedImage } from "@/lib/ai/mock";
 import { getCurrentUser } from "@/lib/auth";
+import {
+  applyMeaningMemory,
+  chooseDistinctFallbackTitle,
+  getMeaningMemory,
+  getRecentTitles,
+  maxTitleSimilarity
+} from "@/lib/flower-memory";
 import { prisma } from "@/lib/prisma";
 import { assertOwnedUpload, assertRateLimit, clientIpFromRequest } from "@/lib/security";
+import type { AiAnalysis, GenerateRecordRequest } from "@/lib/validation";
 import { generateRecordRequestSchema } from "@/lib/validation";
 
 export const runtime = "nodejs";
@@ -19,6 +27,56 @@ function fallbackAnalysis() {
     comment: "这束花很会心动",
     title: "花开此刻"
   };
+}
+
+async function analyzeWithProvider(input: GenerateRecordRequest & { recentTitles?: string[] }) {
+  if (env.aiProvider === "ark") return analyzeBouquetWithArk(input);
+  if (env.aiProvider === "openai") return analyzeBouquetWithOpenAI(input);
+  return mockAnalyzeBouquet(input);
+}
+
+async function analyzeWithTitleAudit(input: GenerateRecordRequest, recentTitles: string[]) {
+  const errors: string[] = [];
+  let bestAnalysis: AiAnalysis | null = null;
+  let bestSimilarity = Infinity;
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const analysis = await analyzeWithProvider({
+        ...input,
+        recentTitles: attempt === 0
+          ? recentTitles
+          : [
+              ...recentTitles,
+              `上一次生成的标题“${bestAnalysis?.title || ""}”相似度过高，请换一种完全不同的意象。`
+            ]
+      });
+      const similarity = maxTitleSimilarity(analysis.title, recentTitles);
+      if (similarity < bestSimilarity) {
+        bestAnalysis = analysis;
+        bestSimilarity = similarity;
+      }
+      if (similarity < 0.8) {
+        return { analysis, titleSimilarity: similarity, titleRegenerated: attempt > 0 };
+      }
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  if (bestAnalysis) {
+    const fallbackTitle = chooseDistinctFallbackTitle(recentTitles, bestAnalysis.title);
+    return {
+      analysis: {
+        ...bestAnalysis,
+        title: fallbackTitle
+      },
+      titleSimilarity: maxTitleSimilarity(fallbackTitle, recentTitles),
+      titleRegenerated: true
+    };
+  }
+
+  throw new Error(errors.join(" | ") || "标题生成失败。");
 }
 
 export async function POST(request: Request) {
@@ -44,11 +102,11 @@ export async function POST(request: Request) {
     });
     await assertOwnedUpload(user.id, input.originalImageUrl, ["original"]);
 
-    const analysisPromise = env.aiProvider === "ark"
-      ? analyzeBouquetWithArk(input)
-      : env.aiProvider === "openai"
-        ? analyzeBouquetWithOpenAI(input)
-        : Promise.resolve(mockAnalyzeBouquet(input));
+    const [recentTitles, meaningMemory] = await Promise.all([
+      getRecentTitles(user.id),
+      getMeaningMemory(user.id)
+    ]);
+    const analysisPromise = analyzeWithTitleAudit(input, recentTitles);
 
     const imagePromise = input.style === "original"
       ? Promise.resolve({ url: input.originalImageUrl, failed: false, error: "" })
@@ -73,7 +131,21 @@ export async function POST(request: Request) {
 
     const [analysisResult, imageResult] = await Promise.allSettled([analysisPromise, imagePromise]);
     const analysisFailed = analysisResult.status === "rejected";
-    const analysis = analysisFailed ? fallbackAnalysis() : analysisResult.value;
+    const auditedAnalysis = analysisFailed
+      ? {
+          analysis: {
+            ...fallbackAnalysis(),
+            title: chooseDistinctFallbackTitle(recentTitles, "花开此刻")
+          },
+          titleSimilarity: maxTitleSimilarity(chooseDistinctFallbackTitle(recentTitles, "花开此刻"), recentTitles),
+          titleRegenerated: false
+        }
+      : analysisResult.value;
+    const meaningResult = applyMeaningMemory(auditedAnalysis.analysis.flower_details, meaningMemory);
+    const analysis = {
+      ...auditedAnalysis.analysis,
+      flower_details: meaningResult.flower_details
+    };
     const image = imageResult.status === "fulfilled"
       ? imageResult.value
       : {
@@ -109,6 +181,11 @@ export async function POST(request: Request) {
       recordDate: input.recordDate,
       story: input.story,
       provider: env.aiProvider,
+      titleSimilarity: auditedAnalysis.titleSimilarity,
+      titleRegenerated: auditedAnalysis.titleRegenerated,
+      meaningMemoryMatchedCount: meaningResult.matchedCount,
+      meaningMemoryExactMatches: meaningResult.exactMatches,
+      meaningMemoryFuzzyMatches: meaningResult.fuzzyMatches,
       imageGenerationFailed: image.failed,
       imageGenerationError: image.failed ? image.error : undefined,
       analysisGenerationFailed: analysisFailed,

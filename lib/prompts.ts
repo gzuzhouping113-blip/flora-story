@@ -17,11 +17,12 @@ export async function loadImagePrompt(style: Exclude<Style, "original">) {
   return readFile(file, "utf8");
 }
 
-export async function loadVisionPrompt(values: { time: string; story?: string }) {
+export async function loadVisionPrompt(values: { time: string; story?: string; recentTitles?: string[] }) {
   const file = path.join(process.cwd(), "prompts", "vision", "analyze-bouquet.zh.md");
   const template = await readFile(file, "utf8");
   return renderTemplate(template, {
     time: values.time,
-    story: values.story?.trim() || "无"
+    story: values.story?.trim() || "无",
+    recentTitles: values.recentTitles?.length ? values.recentTitles.join("、") : "无"
   });
 }
