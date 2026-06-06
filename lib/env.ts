@@ -30,7 +30,7 @@ export const env = {
   openAiImageApiKey: process.env.OPENAI_IMAGE_API_KEY || process.env.GPT_IMAGE_API_KEY || process.env.OPENAI_API_KEY || "",
   openAiVisionApiKey: process.env.OPENAI_VISION_API_KEY || process.env.GPT_VISION_API_KEY || process.env.OPENAI_API_KEY || "",
   openAiImageModel: process.env.OPENAI_IMAGE_MODEL || process.env.GPT_IMAGE_MODEL || "gpt-image-2",
-  openAiVisionModel: process.env.OPENAI_VISION_MODEL || process.env.GPT_VISION_MODEL || "gpt-5.4-mini",
+  openAiVisionModel: process.env.OPENAI_VISION_MODEL || process.env.GPT_VISION_MODEL || "mimo-v2-omni",
   publicAppUrl: (process.env.PUBLIC_APP_URL || "http://127.0.0.1:3000").replace(/\/$/, ""),
   r2AccountId: process.env.R2_ACCOUNT_ID || "",
   r2AccessKeyId: process.env.R2_ACCESS_KEY_ID || "",

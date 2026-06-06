@@ -116,6 +116,65 @@ function extractResponseText(data: unknown): string {
   throw new Error("Vision model returned empty content.");
 }
 
+function parseSsePayload(text: string) {
+  const chunks = text
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(line => line.startsWith("data:"))
+    .map(line => line.replace(/^data:\s*/, "").trim())
+    .filter(line => line && line !== "[DONE]");
+
+  if (chunks.length === 0) return null;
+
+  const parsedChunks = chunks.map(chunk => {
+    try {
+      return JSON.parse(chunk);
+    } catch {
+      return { raw: chunk };
+    }
+  });
+
+  const textParts = parsedChunks.flatMap(chunk => {
+    const obj = chunk as {
+      output_text?: string;
+      choices?: Array<{
+        text?: string;
+        delta?: { content?: string | Array<{ text?: string; content?: string }> };
+        message?: { content?: string | Array<{ text?: string; content?: string }> };
+      }>;
+    };
+    const choice = obj.choices?.[0];
+    const contents = [
+      obj.output_text,
+      choice?.text,
+      choice?.delta?.content,
+      choice?.message?.content
+    ];
+    return contents.flatMap(content => {
+      if (!content) return [];
+      if (typeof content === "string") return [content];
+      return content.map(item => item.text || item.content || "").filter(Boolean);
+    });
+  });
+
+  const combinedText = textParts.join("");
+  if (combinedText.trim()) return { text: combinedText, empty: false };
+  return { text: "", empty: true };
+}
+
+function extractVisionText(payload: unknown) {
+  if (typeof payload === "object" && payload && "raw" in payload && typeof (payload as JsonObject).raw === "string") {
+    const raw = String((payload as JsonObject).raw);
+    const ssePayload = parseSsePayload(raw);
+    if (ssePayload?.text) return ssePayload.text;
+    if (ssePayload?.empty) {
+      throw new Error("Vision model returned SSE chunks without assistant content.");
+    }
+  }
+
+  return extractResponseText(payload);
+}
+
 async function fetchJsonWithTimeout(input: {
   url: string;
   apiKey: string;
@@ -194,7 +253,7 @@ async function withVisionRetry<T>(label: string, fn: () => Promise<T>, retries =
 }
 
 async function parseVisionPayload(payload: unknown) {
-  return aiAnalysisSchema.parse(parseLooseJson(extractResponseText(payload)));
+  return aiAnalysisSchema.parse(parseLooseJson(extractVisionText(payload)));
 }
 
 function parseDataUrl(dataUrl: string) {
@@ -275,17 +334,16 @@ export async function analyzeBouquetWithOpenAI(input: GenerateRecordRequest & { 
 
   const attempts: Array<{ label: string; run: () => Promise<AiAnalysis> }> = [
     {
-      label: "chat/completions json_schema",
+      label: "chat/completions plain",
       run: async () => parseVisionPayload(await fetchJsonWithTimeout({
         url: `${env.openAiBaseUrl}/chat/completions`,
         apiKey: env.openAiVisionApiKey,
         body: {
           model: env.openAiVisionModel,
           messages: chatMessages,
-          response_format: {
-            type: "json_schema",
-            json_schema: flowerAnalysisJsonSchema
-          }
+          stream: false,
+          temperature: 0,
+          max_tokens: 600
         },
         timeoutMs: 90_000
       }))
@@ -298,19 +356,29 @@ export async function analyzeBouquetWithOpenAI(input: GenerateRecordRequest & { 
         body: {
           model: env.openAiVisionModel,
           messages: chatMessages,
+          stream: false,
+          temperature: 0,
+          max_tokens: 600,
           response_format: { type: "json_object" }
         },
         timeoutMs: 90_000
       }))
     },
     {
-      label: "chat/completions plain",
+      label: "chat/completions json_schema",
       run: async () => parseVisionPayload(await fetchJsonWithTimeout({
         url: `${env.openAiBaseUrl}/chat/completions`,
         apiKey: env.openAiVisionApiKey,
         body: {
           model: env.openAiVisionModel,
-          messages: chatMessages
+          messages: chatMessages,
+          stream: false,
+          temperature: 0,
+          max_tokens: 600,
+          response_format: {
+            type: "json_schema",
+            json_schema: flowerAnalysisJsonSchema
+          }
         },
         timeoutMs: 90_000
       }))

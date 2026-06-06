@@ -200,7 +200,7 @@ const child = spawn(
       AI_PROVIDER: "openai",
       PUBLIC_APP_URL: baseUrl,
       OPENAI_IMAGE_MODEL: process.env.OPENAI_IMAGE_MODEL || "gpt-image-2",
-      OPENAI_VISION_MODEL: process.env.OPENAI_VISION_MODEL || "gpt-5.4-mini"
+      OPENAI_VISION_MODEL: process.env.OPENAI_VISION_MODEL || "mimo-v2-omni"
     },
     stdio: ["ignore", "pipe", "pipe"]
   }
