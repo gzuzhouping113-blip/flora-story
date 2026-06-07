@@ -13,6 +13,7 @@ import {
 } from "@/lib/flower-memory";
 import { prisma } from "@/lib/prisma";
 import { assertOwnedUpload, assertRateLimit, clientIpFromRequest } from "@/lib/security";
+import { deleteStoredImages } from "@/lib/storage";
 import type { AiAnalysis, GenerateRecordRequest } from "@/lib/validation";
 import { generateRecordRequestSchema } from "@/lib/validation";
 
@@ -125,11 +126,31 @@ export async function POST(request: Request) {
       const message = analysisResult.reason instanceof Error
         ? analysisResult.reason.message
         : String(analysisResult.reason);
+      const generatedImage = imageResult.status === "fulfilled" ? imageResult.value : null;
+      if (generatedImage && !generatedImage.failed && generatedImage.url !== input.originalImageUrl) {
+        await deleteStoredImages([generatedImage.url]);
+      }
+      console.error("[api/ai/generate-record] analysis failed", {
+        provider: env.aiProvider,
+        style: input.style,
+        analysisError: message,
+        imageError: imageResult.status === "fulfilled" && imageResult.value.failed
+          ? imageResult.value.error
+          : imageResult.status === "rejected"
+            ? imageResult.reason instanceof Error ? imageResult.reason.message : String(imageResult.reason)
+            : ""
+      });
       return NextResponse.json(
         {
           error: "花朵识别失败，请重试。",
           analysisGenerationFailed: true,
           analysisGenerationError: message,
+          imageGenerationFailed: imageResult.status === "fulfilled" ? imageResult.value.failed : true,
+          imageGenerationError: imageResult.status === "fulfilled" && imageResult.value.failed
+            ? imageResult.value.error
+            : imageResult.status === "rejected"
+              ? imageResult.reason instanceof Error ? imageResult.reason.message : String(imageResult.reason)
+              : undefined,
           originalImageUrl: input.originalImageUrl,
           generatedImageUrl: input.originalImageUrl,
           style: input.style,
