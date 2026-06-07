@@ -71,6 +71,18 @@ export async function POST(request: Request) {
     await assertOwnedUpload(user.id, input.originalImageUrl, ["original"]);
     await assertOwnedUpload(user.id, input.generatedImageUrl, ["original", "generated"]);
 
+    const existingRecord = await withTransientDatabaseRetry(() => prisma.flowerRecord.findFirst({
+      where: {
+        userId: user.id,
+        generatedImageUrl: input.generatedImageUrl
+      },
+      orderBy: { createdAt: "desc" }
+    }));
+    if (existingRecord) {
+      await markAssetsUsed(user.id, [input.originalImageUrl, input.generatedImageUrl]);
+      return NextResponse.json({ record: toClientRecord(existingRecord), duplicate: true });
+    }
+
     const record = await withTransientDatabaseRetry(() => prisma.flowerRecord.create({
       data: {
         userId: user.id,

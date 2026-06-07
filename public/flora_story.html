@@ -799,7 +799,7 @@
                     
                     <div class="flex gap-3">
                         <button onclick="retryGeneration()" class="w-1/3 py-3.5 rounded-full bg-gray-200 text-gray-600 font-bold">重新生成</button>
-                        <button onclick="saveGeneratedRecord()" class="w-2/3 py-3.5 rounded-full bg-[#1D1D1F] text-white font-bold shadow-lg">保存至花历</button>
+                        <button id="save-generated-button" onclick="saveGeneratedRecord()" class="w-2/3 py-3.5 rounded-full bg-[#1D1D1F] text-white font-bold shadow-lg disabled:cursor-not-allowed disabled:bg-[#1D1D1F]/25 disabled:shadow-none">保存至花历</button>
                     </div>
                 </div>
 
@@ -875,7 +875,8 @@
             lastFailedRecord: null,
             detailRecord: null,
             currentUser: null,
-            records: []
+            records: [],
+            isSavingGeneratedRecord: false
         };
 
         const loadingTexts = [
@@ -1087,16 +1088,18 @@
             preview.style.opacity = '0';
             preview.removeAttribute('src');
 
-            if (fallback) {
+            if (!nextSrc || nextSrc === fallback) {
+                if (!fallback) return;
                 preview.onload = () => {
                     if (generatedPreviewLoadToken === token) preview.style.opacity = '1';
                 };
-                preview.onerror = null;
+                preview.onerror = () => {
+                    if (generatedPreviewLoadToken === token) preview.removeAttribute('src');
+                };
                 preview.src = fallback;
                 if (fallback.startsWith('data:')) preview.style.opacity = '1';
+                return;
             }
-
-            if (!nextSrc || nextSrc === fallback) return;
 
             const loader = new Image();
             loader.crossOrigin = 'anonymous';
@@ -2281,10 +2284,12 @@
             const record = appState.generatedRecord;
             if (!record) return;
 
+            appState.isSavingGeneratedRecord = false;
             preloadGeneratedPreview(record.image, appState.photoDataUrl);
             document.getElementById('generated-style-label').innerText = styleTag(record.style, record.generatedImageUrl, record.originalImageUrl);
             document.getElementById('generated-title').innerText = record.title;
             document.getElementById('generated-comment').innerText = `“${record.comment}”`;
+            updateSaveGeneratedButton();
             const tagsContainer = document.getElementById('generated-tags');
             tagsContainer.innerHTML = '';
             record.tags.forEach(tag => {
@@ -2306,6 +2311,22 @@
             } else {
                 storyContainer.classList.add('hidden');
             }
+        }
+
+        function updateSaveGeneratedButton(saved = false) {
+            const button = document.getElementById('save-generated-button');
+            if (!button) return;
+            const record = appState.generatedRecord;
+            const disabled = appState.isSavingGeneratedRecord
+                || saved
+                || !record
+                || record.generationFailed
+                || !record.flowerDetails?.length
+                || Boolean(record.saved);
+            button.disabled = disabled;
+            button.innerText = appState.isSavingGeneratedRecord
+                ? '正在保存...'
+                : (saved || record?.saved ? '已保存' : '保存至花历');
         }
 
         function parseFlowerTag(tag) {
@@ -2351,10 +2372,16 @@
         async function saveGeneratedRecord() {
             if (!appState.generatedRecord) return;
             if (!requireLogin()) return;
+            if (appState.isSavingGeneratedRecord || appState.generatedRecord.saved) {
+                showToast('这束花已经保存过了。');
+                return;
+            }
             if (appState.generatedRecord.generationFailed || !appState.generatedRecord.flowerDetails?.length) {
                 showToast('花朵还没有识别成功，请先重试生成。');
                 return;
             }
+            appState.isSavingGeneratedRecord = true;
+            updateSaveGeneratedButton();
             try {
                 const record = appState.generatedRecord;
                 const response = await fetch('/api/records', {
@@ -2374,8 +2401,10 @@
                 });
                 const data = await readApiJson(response, '保存失败。');
                 record.id = data.record && data.record.id;
+                record.saved = true;
                 ensureLocalId(record);
-                appState.records.unshift(record);
+                const alreadyInList = appState.records.some(item => item.id === record.id);
+                if (!alreadyInList) appState.records.unshift(record);
                 renderTimelineRecords();
                 renderStatsSummary();
                 renderFloraBook();
@@ -2383,6 +2412,8 @@
                 showToast('这束花已经长进花历里了。');
                 jumpToTimeline();
             } catch (error) {
+                appState.isSavingGeneratedRecord = false;
+                updateSaveGeneratedButton();
                 showToast(error.message || '保存失败，请再试一次。');
             }
         }
