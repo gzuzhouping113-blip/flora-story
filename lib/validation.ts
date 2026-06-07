@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const styleSchema = z.enum(["magnet", "watercolor", "polaroid", "original"]);
-export const actionTypeSchema = z.enum(["received", "sent"]);
+export const actionTypeSchema = z.enum(["received", "sent", "self"]);
 
 export function cleanFlowerName(name: string) {
   return String(name || "花材")
