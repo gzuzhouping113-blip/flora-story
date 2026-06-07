@@ -8,6 +8,8 @@ const baseUrl = `http://127.0.0.1:${port}`;
 let savedRecordId = "";
 let uploadedFileUrl = "";
 let otherUserEmail = "";
+let otherUserId = "";
+let testUserId = "";
 const testEmail = `flora-test-${Date.now()}@example.com`;
 const testPassword = "flora-test-123456";
 
@@ -66,6 +68,18 @@ function createTinyPngFile() {
   return new File([buffer], "flower-test.png", { type: "image/png" });
 }
 
+function localUploadPathnameFromUrl(url) {
+  if (url.startsWith("/uploads/")) return url;
+  try {
+    const parsed = new URL(url);
+    if ((parsed.hostname === "127.0.0.1" || parsed.hostname === "localhost" || parsed.hostname === "::1")
+      && parsed.pathname.startsWith("/uploads/")) {
+      return parsed.pathname;
+    }
+  } catch {}
+  return "";
+}
+
 const nextCli = path.join(process.cwd(), "node_modules", "next", "dist", "bin", "next");
 const child = spawn(
   process.execPath,
@@ -119,6 +133,7 @@ try {
   const otherUser = await withRetry("create isolation user", () => prismaForIsolation.user.create({
     data: { email: otherUserEmail }
   }));
+  otherUserId = otherUser.id;
   await withRetry("create isolation record", () => prismaForIsolation.flowerRecord.create({
     data: {
       userId: otherUser.id,
@@ -188,6 +203,7 @@ try {
   if (setCookie) cookieJar.set("cookie", setCookie.split(";")[0]);
   const register = await readJson(registerResponse, "register");
   if (!register.user?.email) throw new Error("register did not return user.");
+  testUserId = register.user.id;
 
   await readJson(await fetch(`${baseUrl}/api/auth/logout`, {
     method: "POST",
@@ -317,6 +333,9 @@ try {
         OR: [
           { bucket: { contains: "flora-test-" } },
           { bucket: { contains: "flora-other-" } },
+          ...(testUserId ? [{ bucket: { contains: testUserId } }] : []),
+          ...(otherUserId ? [{ bucket: { contains: otherUserId } }] : []),
+          { bucket: { contains: "127.0.0.1" } },
           { bucket: { contains: "unknown" } }
         ]
       }
@@ -325,10 +344,11 @@ try {
   } catch (error) {
     console.error("user cleanup failed:", error);
   }
-  if (uploadedFileUrl.startsWith("/uploads/original/")) {
+  const uploadedPathname = localUploadPathnameFromUrl(uploadedFileUrl);
+  if (uploadedPathname.startsWith("/uploads/original/")) {
     try {
       const publicDir = path.resolve(process.cwd(), "public");
-      const filePath = path.resolve(publicDir, uploadedFileUrl.replace(/^\/+/, ""));
+      const filePath = path.resolve(publicDir, decodeURIComponent(uploadedPathname).replace(/^\/+/, ""));
       if (filePath.startsWith(`${publicDir}${path.sep}`)) {
         await rm(filePath, { force: true });
       }

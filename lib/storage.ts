@@ -60,10 +60,32 @@ function getCloudinaryClient() {
   return cloudinary;
 }
 
-function localFilePathFromUrl(url: string) {
-  if (!url.startsWith("/uploads/")) return null;
+function localUploadPathnameFromUrl(url: string) {
+  if (url.startsWith("/uploads/")) return url;
 
-  const relativePath = url.replace(/^\/+/, "");
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+
+  const localHosts = new Set(["127.0.0.1", "localhost", "::1"]);
+  const isLocalUrl = localHosts.has(parsed.hostname);
+  let isOwnUrl = false;
+  try {
+    isOwnUrl = Boolean(env.publicAppUrl) && parsed.origin === new URL(env.publicAppUrl).origin;
+  } catch {}
+
+  if ((!isLocalUrl && !isOwnUrl) || !parsed.pathname.startsWith("/uploads/")) return null;
+  return parsed.pathname;
+}
+
+function localFilePathFromUrl(url: string) {
+  const pathname = localUploadPathnameFromUrl(url);
+  if (!pathname) return null;
+
+  const relativePath = decodeURIComponent(pathname).replace(/^\/+/, "");
   const publicDir = path.resolve(process.cwd(), "public");
   const filePath = path.resolve(publicDir, relativePath);
   if (!filePath.startsWith(`${publicDir}${path.sep}`)) {

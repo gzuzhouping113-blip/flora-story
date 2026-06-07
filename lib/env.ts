@@ -4,6 +4,8 @@ export type StorageProvider = "local" | "r2" | "cloudinary";
 function readAiProvider(): AiProvider {
   if (process.env.AI_PROVIDER === "ark") return "ark";
   if (process.env.AI_PROVIDER === "openai" || process.env.AI_PROVIDER === "gpt") return "openai";
+  if (process.env.AI_PROVIDER === "mock" && process.env.NODE_ENV !== "production") return "mock";
+  if (process.env.NODE_ENV === "production") return "openai";
   return "mock";
 }
 
