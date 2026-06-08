@@ -44,6 +44,11 @@ async function analyzeWithTitleAudit(input: GenerateRecordRequest, recentTitles:
   }
   return { analysis, titleSimilarity: similarity, titleRegenerated: false };
 }
+
+function imageUrlTail(url: string) {
+  return url.replace(/^https?:\/\/[^/]+\//, ".../").slice(-160);
+}
+
 export async function POST(request: Request) {
   try {
     const user = await getCurrentUser();
@@ -100,6 +105,12 @@ export async function POST(request: Request) {
       const message = analysisResult.reason instanceof Error
         ? analysisResult.reason.message
         : String(analysisResult.reason);
+      console.error("[api/ai/generate-record] analysis failed", {
+        provider: env.aiProvider,
+        style: input.style,
+        originalImage: imageUrlTail(input.originalImageUrl),
+        error: message
+      });
       return NextResponse.json(
         {
           error: "花朵识别失败，请重试。",
@@ -130,6 +141,21 @@ export async function POST(request: Request) {
           failed: true,
           error: imageResult.reason instanceof Error ? imageResult.reason.message : String(imageResult.reason)
         };
+
+    if (image.failed) {
+      console.error("[api/ai/generate-record] image generation failed", {
+        provider: env.aiProvider,
+        style: input.style,
+        originalImage: imageUrlTail(input.originalImageUrl),
+        error: image.error
+      });
+    } else {
+      console.info("[api/ai/generate-record] generation completed", {
+        provider: env.aiProvider,
+        style: input.style,
+        generated: image.url !== input.originalImageUrl
+      });
+    }
 
     if (!image.failed && image.url !== input.originalImageUrl) {
       await prisma.uploadAsset.upsert({
