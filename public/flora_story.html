@@ -198,6 +198,34 @@
             white-space: nowrap;
             line-height: 1;
         }
+        .flower-meaning-row {
+            display: grid;
+            grid-template-columns: 18px minmax(0, 1fr);
+            align-items: flex-start;
+            column-gap: 8px;
+            font-size: 12px;
+            line-height: 1.55;
+        }
+        .flower-meaning-icon {
+            width: 18px;
+            height: 18px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 999px;
+            background: rgba(246, 235, 237, 0.92);
+            font-size: 11px;
+            box-shadow: 0 3px 8px rgba(166, 118, 132, 0.08);
+        }
+        .flower-meaning-name {
+            color: #A67684;
+            font-weight: 800;
+            white-space: nowrap;
+            margin-right: 8px;
+        }
+        .flower-meaning-text {
+            color: #5E6C79;
+        }
         .timeline-card {
             position: relative;
             width: min(100%, 172px);
@@ -1201,48 +1229,83 @@
             return lines.length;
         }
 
+        function drawTimelineFlowerStrip(context, tags, x, y, maxWidth) {
+            const flowers = (tags || []).slice(0, 2).map(parseFlowerTag);
+            if (!flowers.length) return 0;
+
+            context.save();
+            context.textBaseline = 'middle';
+            let cursorX = x;
+            flowers.forEach((flower, index) => {
+                if (index > 0) {
+                    context.fillStyle = 'rgba(166, 118, 132, 0.38)';
+                    context.beginPath();
+                    context.arc(cursorX + 5, y + 9, 2.5, 0, Math.PI * 2);
+                    context.fill();
+                    cursorX += 17;
+                }
+
+                context.font = '15px "Segoe UI Emoji", "Apple Color Emoji", sans-serif';
+                context.fillStyle = '#A67684';
+                context.fillText(flower.icon || '💐', cursorX, y + 9);
+                cursorX += 21;
+
+                context.font = 'bold 14px Arial, sans-serif';
+                const name = cleanFlowerName(flower.name || '花材');
+                const available = Math.max(36, maxWidth - (cursorX - x));
+                let displayName = name;
+                while (context.measureText(displayName).width > available && displayName.length > 1) {
+                    displayName = displayName.slice(0, -1);
+                }
+                if (displayName !== name) displayName = `${displayName}...`;
+                context.fillText(displayName, cursorX, y + 9);
+                cursorX += context.measureText(displayName).width + 12;
+            });
+            context.restore();
+            return 24;
+        }
+
         async function downloadRecordCard(record) {
             if (!record) return;
             const scale = 3;
             const width = 516;
-            const padding = 34;
-            const cardX = 54;
-            const cardY = 38;
+            const padding = 24;
+            const cardX = 36;
+            const cardY = 34;
             const cardWidth = width - cardX * 2;
             const story = String(record.story || '').trim();
             const hasStory = story.length > 0;
-            const storyTextWidth = cardWidth - padding * 2 - 28;
-            const storyFontSize = story.length > 150 ? 14 : story.length > 90 ? 16 : 18;
-            const storyLineHeight = storyFontSize + 8;
-            const footerGap = hasStory ? 72 : 34;
+            const imageWidth = cardWidth - padding * 2;
+            const imageHeight = Math.round(imageWidth * 4 / 3);
+            const storyTextWidth = cardWidth - padding * 2;
+            const storyFontSize = story.length > 150 ? 13 : story.length > 90 ? 14 : 15;
+            const storyLineHeight = storyFontSize + 7;
             const canvas = document.createElement('canvas');
             const measureContext = canvas.getContext('2d');
             measureContext.font = `${storyFontSize}px "Noto Serif SC", serif`;
             const storyLines = hasStory ? getWrappedLines(measureContext, story, storyTextWidth) : [];
-            const storyBoxHeight = hasStory ? Math.max(78, storyLines.length * storyLineHeight + 28) : 0;
-            const baseHeight = hasStory ? 960 : 812;
-            const height = Math.max(baseHeight, hasStory ? 850 + storyBoxHeight : baseHeight);
-            const cardHeight = height - 76;
+            const storyBoxHeight = hasStory ? Math.max(64, storyLines.length * storyLineHeight + 24) : 0;
+            const contentHeight = imageHeight + 24 + 30 + 8 + 44 + 28 + (hasStory ? 22 + storyBoxHeight + 18 : 18);
+            const cardHeight = padding * 2 + contentHeight;
+            const height = cardY * 2 + cardHeight;
             canvas.width = width * scale;
             canvas.height = height * scale;
             const context = canvas.getContext('2d');
             context.scale(scale, scale);
             context.fillStyle = '#F5F5F7';
             context.fillRect(0, 0, width, height);
-            context.shadowColor = 'rgba(29, 29, 31, 0.14)';
-            context.shadowBlur = 34;
-            context.shadowOffsetY = 18;
-            context.fillStyle = 'rgba(255, 255, 255, 0.96)';
-            roundedRect(context, cardX, cardY, cardWidth, cardHeight, 28);
+            context.shadowColor = 'rgba(29, 29, 31, 0.10)';
+            context.shadowBlur = 22;
+            context.shadowOffsetY = 10;
+            context.fillStyle = 'rgba(255, 255, 255, 0.82)';
+            roundedRect(context, cardX, cardY, cardWidth, cardHeight, 22);
             context.fill();
             context.shadowColor = 'transparent';
 
             const imageX = cardX + padding;
             const imageY = cardY + padding;
-            const imageWidth = cardWidth - padding * 2;
-            const imageHeight = 390;
             context.fillStyle = '#F8F6F4';
-            roundedRect(context, imageX, imageY, imageWidth, imageHeight, 22);
+            roundedRect(context, imageX, imageY, imageWidth, imageHeight, 18);
             context.fill();
             const image = await loadDrawableImage(record.image);
             if (image) {
@@ -1250,7 +1313,7 @@
                 const drawWidth = image.naturalWidth * ratio;
                 const drawHeight = image.naturalHeight * ratio;
                 context.save();
-                roundedRect(context, imageX, imageY, imageWidth, imageHeight, 22);
+                roundedRect(context, imageX, imageY, imageWidth, imageHeight, 18);
                 context.clip();
                 context.drawImage(image, imageX + (imageWidth - drawWidth) / 2, imageY + (imageHeight - drawHeight) / 2, drawWidth, drawHeight);
                 context.restore();
@@ -1258,75 +1321,55 @@
 
             const dateText = `${String(record.date.getMonth() + 1).padStart(2, '0')}.${String(record.date.getDate()).padStart(2, '0')}`;
             const actionText = actionLabel(record.actionType);
-            context.font = 'bold 18px Arial, sans-serif';
+            context.font = 'bold 13px Arial, sans-serif';
             context.textBaseline = 'middle';
             context.fillStyle = 'rgba(255, 255, 255, 0.92)';
-            roundedRect(context, imageX + 14, imageY + 14, 64, 30, 15);
+            roundedRect(context, imageX + 8, imageY + 8, 50, 22, 11);
             context.fill();
             context.fillStyle = '#A67684';
-            context.fillText(dateText, imageX + 27, imageY + 29);
+            context.fillText(dateText, imageX + 16, imageY + 19);
             context.fillStyle = record.actionType === 'received'
                 ? 'rgba(210, 165, 179, 0.92)'
                 : (record.actionType === 'self' ? 'rgba(210, 165, 179, 0.92)' : 'rgba(134, 134, 139, 0.86)');
-            const actionBadgeWidth = actionText.length > 2 ? 68 : 58;
-            roundedRect(context, imageX + imageWidth - actionBadgeWidth - 14, imageY + 14, actionBadgeWidth, 30, 15);
+            const actionBadgeWidth = actionText.length > 2 ? 50 : 42;
+            roundedRect(context, imageX + imageWidth - actionBadgeWidth - 8, imageY + 8, actionBadgeWidth, 22, 11);
             context.fill();
             context.fillStyle = '#FFFFFF';
-            context.fillText(actionText, imageX + imageWidth - actionBadgeWidth - 1, imageY + 29);
+            context.fillText(actionText, imageX + imageWidth - actionBadgeWidth + 3, imageY + 19);
 
             const textX = cardX + padding;
-            let textY = imageY + imageHeight + 44;
+            let textY = imageY + imageHeight + 34;
             context.textBaseline = 'alphabetic';
             context.fillStyle = '#1D1D1F';
-            context.font = 'bold 28px "Noto Serif SC", serif';
-            const titleLines = drawWrappedText(context, record.title, textX, textY, cardWidth - padding * 2, 34, 1);
-            textY += titleLines * 34 + 8;
+            context.font = 'bold 22px "Noto Serif SC", serif';
+            const titleLines = drawWrappedText(context, record.title, textX, textY, imageWidth, 28, 1);
+            textY += titleLines * 28 + 8;
             context.fillStyle = '#86868B';
-            context.font = 'italic 19px "Noto Serif SC", serif';
-            const commentLines = drawWrappedText(context, `“${record.comment}”`, textX, textY, cardWidth - padding * 2, 28, 2);
-            textY += commentLines * 28 + 26;
-            const chipTags = (record.tags || []).slice(0, 2).map(parseFlowerTag);
-            chipTags.forEach((flower, index) => {
-                const chipX = textX + index * 156;
-                const chipY = textY;
-                context.fillStyle = 'rgba(246, 235, 237, 0.86)';
-                roundedRect(context, chipX, chipY, 136, 30, 15);
-                context.fill();
-                context.fillStyle = '#A67684';
-                context.font = 'bold 16px Arial, sans-serif';
-                context.textBaseline = 'middle';
-                const label = `${flower.icon}${cleanFlowerName(flower.name || '花材')}`;
-                context.fillText(label.length > 8 ? `${label.slice(0, 8)}...` : label, chipX + 12, chipY + 15);
-            });
-            textY += chipTags.length ? 58 : 16;
+            context.font = 'italic 16px "Noto Serif SC", serif';
+            const commentLines = drawWrappedText(context, `“${record.comment}”`, textX, textY, imageWidth, 22, 2);
+            textY += commentLines * 22 + 16;
+            textY += drawTimelineFlowerStrip(context, record.tags, textX, textY - 2, imageWidth) || 0;
 
             if (hasStory) {
                 context.textBaseline = 'alphabetic';
                 context.fillStyle = '#86868B';
-                context.font = 'bold 13px Arial, sans-serif';
+                context.font = 'bold 12px Arial, sans-serif';
                 context.fillText('这一天的故事', textX, textY);
-                textY += 18;
+                textY += 16;
 
                 const storyBoxX = textX;
                 const storyBoxY = textY;
-                const storyBoxWidth = cardWidth - padding * 2;
-                context.fillStyle = '#F8F8F9';
-                roundedRect(context, storyBoxX, storyBoxY, storyBoxWidth, storyBoxHeight, 18);
+                const storyBoxWidth = imageWidth;
+                context.fillStyle = 'rgba(248, 248, 249, 0.92)';
+                roundedRect(context, storyBoxX, storyBoxY, storyBoxWidth, storyBoxHeight, 14);
                 context.fill();
                 context.fillStyle = '#1D1D1F';
                 context.textBaseline = 'alphabetic';
                 context.font = `${storyFontSize}px "Noto Serif SC", serif`;
                 storyLines.forEach((lineText, index) => {
-                    context.fillText(lineText, storyBoxX + 14, storyBoxY + 28 + index * storyLineHeight);
+                    context.fillText(lineText, storyBoxX + 12, storyBoxY + 24 + index * storyLineHeight);
                 });
-                textY = storyBoxY + storyBoxHeight + footerGap;
             }
-
-            context.fillStyle = '#C7C7CC';
-            context.font = 'bold 11px Arial, sans-serif';
-            context.textAlign = 'center';
-            context.fillText('Flora Story', cardX + cardWidth / 2, cardY + cardHeight - 24);
-            context.textAlign = 'left';
 
             const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
             if (!blob) throw new Error('卡片图片生成失败。');
@@ -2232,13 +2275,8 @@
             const tagsContainer = document.getElementById('generated-tags');
             tagsContainer.innerHTML = '';
             record.tags.forEach(tag => {
-                const parts = tag.split(/[:：]/);
                 const row = document.createElement('div');
-                row.className = 'flex items-start text-xs';
-                row.innerHTML = `
-                    <span class="text-primary-dark font-bold mr-2 whitespace-nowrap">${escapeHtml(parts[0])}：</span>
-                    <span class="text-[#5E6C79] leading-relaxed">${escapeHtml(parts.slice(1).join('：'))}</span>
-                `;
+                row.innerHTML = flowerMeaningRowMarkup(tag);
                 tagsContainer.appendChild(row);
             });
             
@@ -2272,6 +2310,19 @@
                     <span class="flower-mini-text">
                         <span class="flower-mini-name">${escapeHtml(flower.name || '花材')}</span>
                         <span class="flower-mini-meaning">${escapeHtml(flower.meaning || '心意')}</span>
+                    </span>
+                </div>
+            `;
+        }
+
+        function flowerMeaningRowMarkup(tag) {
+            const flower = parseFlowerTag(tag);
+            return `
+                <div class="flower-meaning-row">
+                    <span class="flower-meaning-icon">${escapeHtml(flower.icon)}</span>
+                    <span class="min-w-0">
+                        <span class="flower-meaning-name">${escapeHtml(flower.name || '花材')}：</span>
+                        <span class="flower-meaning-text">${escapeHtml(flower.meaning || '心意')}</span>
                     </span>
                 </div>
             `;
@@ -2457,16 +2508,8 @@
             if (tags && tags.length > 0) {
                 tagsWrapper.style.display = 'block';
                 tags.forEach(tag => {
-                    const flower = parseFlowerTag(tag);
-                    const name = flower.name || '花材';
-                    const meaning = flower.meaning || '等待重新识别';
-                    
                     const row = document.createElement('div');
-                    row.className = 'flex items-start text-xs';
-                    row.innerHTML = `
-                        <span class="text-primary-dark font-bold mr-2 whitespace-nowrap">${escapeHtml(name)}：</span>
-                        <span class="text-[#5E6C79] leading-relaxed">${escapeHtml(meaning)}</span>
-                    `;
+                    row.innerHTML = flowerMeaningRowMarkup(tag);
                     tagsContainer.appendChild(row);
                 });
             } else {
