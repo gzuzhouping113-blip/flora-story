@@ -7,6 +7,12 @@ import { assertCloudinaryReady, assertR2Ready, env } from "@/lib/env";
 
 const allowedMimeTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 const maxUploadBytes = 15 * 1024 * 1024;
+const maxInlinePreviewBytes = 3 * 1024 * 1024;
+
+export type StoredGeneratedImage = {
+  url: string;
+  previewDataUrl?: string;
+};
 
 function normalizeUploadMimeType(file: File) {
   const rawType = (file.type || "").toLowerCase();
@@ -220,6 +226,11 @@ export async function saveUploadedImage(file: File) {
   return saveUploadedImageLocal(file, mimeType);
 }
 
+function dataUrlFromBuffer(buffer: Buffer, mimeType: string) {
+  if (buffer.byteLength > maxInlinePreviewBytes) return undefined;
+  return `data:${mimeType};base64,${buffer.toString("base64")}`;
+}
+
 export async function mirrorRemoteImageToStorage(remoteUrl: string) {
   const response = await fetch(remoteUrl);
   if (!response.ok) {
@@ -253,6 +264,22 @@ export async function mirrorRemoteImageToStorage(remoteUrl: string) {
   await mkdir(dir, { recursive: true });
   await writeFile(path.join(process.cwd(), "public", relativePath), buffer);
   return `/${relativePath.replace(/\\/g, "/")}`;
+}
+
+export async function mirrorRemoteImageToStorageWithPreview(remoteUrl: string): Promise<StoredGeneratedImage> {
+  const response = await fetch(remoteUrl);
+  if (!response.ok) {
+    throw new Error(`生成图片下载失败：${response.status}`);
+  }
+
+  const mimeType = response.headers.get("content-type") || "image/jpeg";
+  const buffer = Buffer.from(await response.arrayBuffer());
+  const url = await saveGeneratedImageBuffer({ buffer, mimeType });
+
+  return {
+    url,
+    previewDataUrl: dataUrlFromBuffer(buffer, mimeType)
+  };
 }
 
 export async function saveGeneratedImageBuffer(input: {
@@ -297,6 +324,22 @@ export async function saveGeneratedImageDataUrl(dataUrl: string) {
     mimeType: match[1],
     buffer: Buffer.from(match[2], "base64")
   });
+}
+
+export async function saveGeneratedImageDataUrlWithPreview(dataUrl: string): Promise<StoredGeneratedImage> {
+  const match = dataUrl.match(/^data:([^;,]+);base64,(.+)$/);
+  if (!match) {
+    throw new Error("生成图片不是有效的 base64 data URL。");
+  }
+
+  const mimeType = match[1];
+  const buffer = Buffer.from(match[2], "base64");
+  const url = await saveGeneratedImageBuffer({ mimeType, buffer });
+
+  return {
+    url,
+    previewDataUrl: dataUrlFromBuffer(buffer, mimeType)
+  };
 }
 
 export async function localImageUrlToDataUrl(url: string) {

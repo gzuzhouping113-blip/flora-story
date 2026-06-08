@@ -1116,9 +1116,6 @@
                 if (url.origin === window.location.origin) {
                     return `${url.pathname}${url.search}${url.hash}`;
                 }
-                if (url.hostname === 'res.cloudinary.com') {
-                    return url.href;
-                }
                 return `/api/image-proxy?url=${encodeURIComponent(url.href)}`;
             } catch {
                 return src;
@@ -1781,13 +1778,15 @@
                 imageGenerationFailed: data.imageGenerationFailed,
                 originalImageUrl: data.originalImageUrl,
                 generatedImageUrl: data.generatedImageUrl,
+                hasInlinePreview: Boolean(data.generatedPreviewDataUrl),
                 imageDidFallback
             });
+            const generatedPreviewImage = data.generatedPreviewDataUrl || data.generatedImageUrl;
             return ensureLocalId({
                 title: data.title,
                 image: appState.visualStyle === 'original' || imageDidFallback
                     ? appState.photoDataUrl
-                    : data.generatedImageUrl,
+                    : generatedPreviewImage,
                 originalImageUrl: data.originalImageUrl || originalImageUrl,
                 generatedImageUrl: imageDidFallback
                     ? (data.originalImageUrl || originalImageUrl)

@@ -13,6 +13,7 @@ import {
 } from "@/lib/flower-memory";
 import { prisma } from "@/lib/prisma";
 import { assertOwnedUpload, assertRateLimit, clientIpFromRequest } from "@/lib/security";
+import type { StoredGeneratedImage } from "@/lib/storage";
 import type { AiAnalysis, GenerateRecordRequest } from "@/lib/validation";
 import { generateRecordRequestSchema } from "@/lib/validation";
 
@@ -49,6 +50,10 @@ function imageUrlTail(url: string) {
   return url.replace(/^https?:\/\/[^/]+\//, ".../").slice(-160);
 }
 
+function normalizeGeneratedImageOutput(output: string | StoredGeneratedImage): StoredGeneratedImage {
+  return typeof output === "string" ? { url: output } : output;
+}
+
 export async function POST(request: Request) {
   try {
     const user = await getCurrentUser();
@@ -78,7 +83,7 @@ export async function POST(request: Request) {
     ]);
     const analysisPromise = analyzeWithTitleAudit(input, recentTitles);
 
-    const imagePromise = input.style === "original"
+    const imagePromise: Promise<StoredGeneratedImage & { failed: boolean; error: string }> = input.style === "original"
       ? Promise.resolve({ url: input.originalImageUrl, failed: false, error: "" })
       : (env.aiProvider === "ark"
           ? generateImageWithArk({
@@ -92,7 +97,7 @@ export async function POST(request: Request) {
               })
             : Promise.resolve(mockGeneratedImage(input.originalImageUrl))
         )
-        .then(url => ({ url, failed: false, error: "" }))
+        .then(output => ({ ...normalizeGeneratedImageOutput(output), failed: false, error: "" }))
         .catch(error => ({
           url: input.originalImageUrl,
           failed: true,
@@ -179,6 +184,7 @@ export async function POST(request: Request) {
       ...analysis,
       originalImageUrl: input.originalImageUrl,
       generatedImageUrl: image.url,
+      generatedPreviewDataUrl: image.previewDataUrl,
       style: input.style,
       actionType: input.actionType,
       recordDate: input.recordDate,

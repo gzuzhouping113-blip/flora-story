@@ -8,8 +8,9 @@ import {
 } from "@/lib/validation";
 import {
   localImageUrlToDataUrl,
-  mirrorRemoteImageToStorage,
-  saveGeneratedImageDataUrl
+  mirrorRemoteImageToStorageWithPreview,
+  saveGeneratedImageDataUrlWithPreview,
+  type StoredGeneratedImage
 } from "@/lib/storage";
 
 type JsonObject = Record<string, unknown>;
@@ -281,7 +282,7 @@ async function imageFileFromUrl(url: string) {
   return new File([buffer], `flower-reference.${mimeType.includes("png") ? "png" : "jpg"}`, { type: mimeType });
 }
 
-async function persistImagePayload(payload: unknown) {
+async function persistImagePayload(payload: unknown): Promise<StoredGeneratedImage> {
   const obj = payload as {
     data?: Array<{ url?: string; b64_json?: string }>;
     url?: string;
@@ -295,11 +296,11 @@ async function persistImagePayload(payload: unknown) {
   const imageUrl = candidate.url || (typeof obj.image === "string" && /^https?:\/\//i.test(obj.image) ? obj.image : "");
 
   if (b64Json) {
-    return saveGeneratedImageDataUrl(b64Json.startsWith("data:") ? b64Json : `data:image/png;base64,${b64Json}`);
+    return saveGeneratedImageDataUrlWithPreview(b64Json.startsWith("data:") ? b64Json : `data:image/png;base64,${b64Json}`);
   }
   if (imageUrl) {
-    if (imageUrl.startsWith("data:")) return saveGeneratedImageDataUrl(imageUrl);
-    return mirrorRemoteImageToStorage(imageUrl);
+    if (imageUrl.startsWith("data:")) return saveGeneratedImageDataUrlWithPreview(imageUrl);
+    return mirrorRemoteImageToStorageWithPreview(imageUrl);
   }
 
   throw new Error("GPT image API did not return a usable image.");
@@ -425,7 +426,7 @@ export async function analyzeBouquetWithOpenAI(input: GenerateRecordRequest & { 
 export async function generateImageWithOpenAI(input: {
   originalImageUrl: string;
   style: Exclude<Style, "original">;
-}) {
+}): Promise<StoredGeneratedImage> {
   assertOpenAiImageReady();
   const prompt = await loadImagePrompt(input.style);
   const imageUrl = await openAiImageInput(input.originalImageUrl);

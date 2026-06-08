@@ -1,7 +1,12 @@
 import { assertArkReady, env } from "@/lib/env";
 import { loadImagePrompt, loadVisionPrompt } from "@/lib/prompts";
 import { aiAnalysisSchema, type AiAnalysis, type GenerateRecordRequest, type Style } from "@/lib/validation";
-import { localImageUrlToDataUrl, mirrorRemoteImageToStorage, saveGeneratedImageDataUrl } from "@/lib/storage";
+import {
+  localImageUrlToDataUrl,
+  mirrorRemoteImageToStorageWithPreview,
+  saveGeneratedImageDataUrlWithPreview,
+  type StoredGeneratedImage
+} from "@/lib/storage";
 
 const arkVisionTimeoutMs = 45_000;
 const arkImageTimeoutMs = 105_000;
@@ -170,7 +175,7 @@ export async function analyzeBouquetWithArk(input: GenerateRecordRequest & { rec
 export async function generateImageWithArk(input: {
   originalImageUrl: string;
   style: Exclude<Style, "original">;
-}) {
+}): Promise<StoredGeneratedImage> {
   assertArkReady();
   const prompt = await loadImagePrompt(input.style);
   const imageUrl = await arkImageInput(input.originalImageUrl);
@@ -200,11 +205,11 @@ export async function generateImageWithArk(input: {
   const generatedUrl = candidate.url || (typeof payload.image === "string" && /^https?:\/\//i.test(payload.image) ? payload.image : "");
 
   if (b64Json) {
-    return saveGeneratedImageDataUrl(b64Json.startsWith("data:") ? b64Json : `data:image/png;base64,${b64Json}`);
+    return saveGeneratedImageDataUrlWithPreview(b64Json.startsWith("data:") ? b64Json : `data:image/png;base64,${b64Json}`);
   }
   if (generatedUrl) {
-    if (generatedUrl.startsWith("data:")) return saveGeneratedImageDataUrl(generatedUrl);
-    return mirrorRemoteImageToStorage(generatedUrl);
+    if (generatedUrl.startsWith("data:")) return saveGeneratedImageDataUrlWithPreview(generatedUrl);
+    return mirrorRemoteImageToStorageWithPreview(generatedUrl);
   }
 
   throw new Error("Ark image API did not return a usable image.");
