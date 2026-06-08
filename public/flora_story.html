@@ -525,6 +525,7 @@
                 <button data-filter-group="action" data-filter-value="all" class="filter-pill active flex-1 py-2 rounded-full text-xs font-bold">全部记录</button>
                 <button data-filter-group="action" data-filter-value="received" class="filter-pill flex-1 py-2 rounded-full text-xs font-bold text-[#86868B]">收到</button>
                 <button data-filter-group="action" data-filter-value="sent" class="filter-pill flex-1 py-2 rounded-full text-xs font-bold text-[#86868B]">送出</button>
+                <button data-filter-group="action" data-filter-value="self" class="filter-pill flex-1 py-2 rounded-full text-xs font-bold text-[#86868B]">送自己</button>
             </div>
             <div class="flex justify-center gap-2">
                 <button onclick="toggleYearFilter('2026')" data-filter-group="year" data-filter-value="2026" class="filter-pill year-pill active px-6 py-2 rounded-full text-xs font-bold border border-primary/70 bg-white/90 text-primary-dark">2026</button>
@@ -676,6 +677,7 @@
                     <div class="flex gap-3 mb-5">
                         <button data-action-choice="received" onclick="selectActionType('received')" class="action-choice flex-1 py-3 rounded-2xl bg-primary text-white font-medium shadow-md shadow-primary/30 transition-all">收到花</button>
                         <button data-action-choice="sent" onclick="selectActionType('sent')" class="action-choice flex-1 py-3 rounded-2xl bg-white text-gray-500 font-medium border border-gray-200 transition-all">送出花</button>
+                        <button data-action-choice="self" onclick="selectActionType('self')" class="action-choice flex-1 py-3 rounded-2xl bg-white text-gray-500 font-medium border border-gray-200 transition-all">送自己</button>
                     </div>
 
                     <div class="mb-5">
@@ -977,6 +979,20 @@
                 : label;
         }
 
+        function actionLabel(actionType) {
+            if (actionType === 'received') return '收到';
+            if (actionType === 'sent') return '送出';
+            if (actionType === 'self') return '送自己';
+            return '记录';
+        }
+
+        function actionBadgeColor(actionType) {
+            if (actionType === 'received') return 'bg-primary/90';
+            if (actionType === 'sent') return 'bg-[#86868B]/80';
+            if (actionType === 'self') return 'bg-[#A67684]/85';
+            return 'bg-[#86868B]/80';
+        }
+
         function recordIdForDom(record) {
             return record.id ? `record-${record.id}` : `record-local-${record.localId}`;
         }
@@ -1241,7 +1257,7 @@
             }
 
             const dateText = `${String(record.date.getMonth() + 1).padStart(2, '0')}.${String(record.date.getDate()).padStart(2, '0')}`;
-            const actionText = record.actionType === 'received' ? '收到' : '送出';
+            const actionText = actionLabel(record.actionType);
             context.font = 'bold 18px Arial, sans-serif';
             context.textBaseline = 'middle';
             context.fillStyle = 'rgba(255, 255, 255, 0.92)';
@@ -1249,7 +1265,9 @@
             context.fill();
             context.fillStyle = '#A67684';
             context.fillText(dateText, imageX + 27, imageY + 29);
-            context.fillStyle = record.actionType === 'received' ? 'rgba(210, 165, 179, 0.92)' : 'rgba(134, 134, 139, 0.86)';
+            context.fillStyle = record.actionType === 'received'
+                ? 'rgba(210, 165, 179, 0.92)'
+                : (record.actionType === 'self' ? 'rgba(166, 118, 132, 0.9)' : 'rgba(134, 134, 139, 0.86)');
             roundedRect(context, imageX + imageWidth - 72, imageY + 14, 58, 30, 15);
             context.fill();
             context.fillStyle = '#FFFFFF';
@@ -2366,8 +2384,8 @@
             const container = document.getElementById('timeline-container');
             const item = document.createElement('div');
             const isLeft = document.querySelectorAll('.timeline-record').length % 2 === 0;
-            const actionLabel = record.actionType === 'received' ? '收到' : '送出';
-            const actionColor = record.actionType === 'received' ? 'bg-primary/90' : 'bg-[#86868B]/80';
+            const actionText = actionLabel(record.actionType);
+            const actionColor = actionBadgeColor(record.actionType);
             const dateText = `${String(record.date.getMonth() + 1).padStart(2, '0')}.${String(record.date.getDate()).padStart(2, '0')}`;
             const flowerMarkup = flowerStripMarkup(record.tags);
             const imageSrc = escapeHtml(displayImageUrl(record.image));
@@ -2386,7 +2404,7 @@
                         <div class="relative aspect-[3/4] overflow-hidden rounded-2xl mb-2 shadow-sm bg-[#F8F6F4]">
                             <img src="${imageSrc}" alt="${safeTitle}" class="object-contain w-full h-full">
                             <div class="absolute top-1.5 left-1.5 bg-white/90 backdrop-blur-sm px-2 py-0.5 rounded-full text-[9px] font-bold text-primary-dark shadow-sm">${escapeHtml(dateText)}</div>
-                            <div class="absolute top-1.5 right-1.5 ${actionColor} text-white px-2 py-0.5 rounded-full text-[9px] shadow-sm">${actionLabel}</div>
+                            <div class="absolute top-1.5 right-1.5 ${actionColor} text-white px-2 py-0.5 rounded-full text-[9px] shadow-sm">${actionText}</div>
                         </div>
                         <div class="px-1 pb-1 pt-0.5">
                             <div class="flex items-center justify-between mb-1.5">
@@ -2402,7 +2420,7 @@
             item.addEventListener('click', () => {
                 openFlowerDetail(record.title, record.tags, `“${record.comment}”`, record.image, record.story, {
                     date: `${formatDateDot(record.date)} · ${weekLabel(record.date)}`,
-                    action: actionLabel,
+                    action: actionLabel(record.actionType),
                     style: record.style,
                     originalImageUrl: record.originalImageUrl,
                     generatedImageUrl: record.generatedImageUrl,
@@ -2579,7 +2597,7 @@
                 document.getElementById('longest-story-title').innerText = longestStory.title;
                 longestCard.onclick = () => openFlowerDetail(longestStory.title, longestStory.tags, `“${longestStory.comment}”`, longestStory.image, longestStory.story, {
                     date: `${formatDateDot(longestStory.date)} · ${weekLabel(longestStory.date)}`,
-                    action: longestStory.actionType === 'received' ? '收到' : '送出',
+                    action: actionLabel(longestStory.actionType),
                     style: longestStory.style,
                     originalImageUrl: longestStory.originalImageUrl,
                     generatedImageUrl: longestStory.generatedImageUrl,
@@ -2759,3 +2777,4 @@
     </script>
 </body>
 </html>
+
