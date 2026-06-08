@@ -747,6 +747,7 @@
                             </div>
                             <button id="date-next-button" type="button" class="date-step-button" aria-label="后一天">›</button>
                         </div>
+                        <p class="mt-2 px-1 text-center text-[11px] leading-relaxed text-[#A88E95]">点不开日历时，可左右滑动或点两侧箭头切换日期</p>
                     </div>
 
                     <div class="mb-6">
@@ -826,8 +827,8 @@
                             <img id="generated-preview" class="w-full h-full object-contain" alt="Generated">
                             <div id="generated-preview-state" class="generated-preview-state absolute inset-0 flex flex-col items-center justify-center bg-[#F8F6F4] text-center px-6">
                                 <div class="h-8 w-8 rounded-full border-2 border-primary-light border-t-primary animate-spin mb-3"></div>
-                                <p class="text-xs font-bold text-primary-dark">正在打开生成图</p>
-                                <p class="mt-1 text-[11px] text-[#86868B] leading-relaxed">图片已经生成，正在载入高清版本。</p>
+                                <p id="generated-preview-state-title" class="text-xs font-bold text-primary-dark">正在打开生成图</p>
+                                <p id="generated-preview-state-detail" class="mt-1 text-[11px] text-[#86868B] leading-relaxed">图片已经生成，正在载入高清版本。</p>
                             </div>
                             <button id="peek-original-button" type="button" class="absolute left-2 top-2 rounded-full bg-white/90 px-3 py-1 text-[10px] font-bold text-primary-dark shadow-sm backdrop-blur">按住看原图</button>
                             <span id="generated-style-label" class="absolute right-2 top-2 rounded-full bg-[#1D1D1F]/70 px-2.5 py-1 text-[10px] font-bold text-white shadow-sm">治愈水彩</span>
@@ -1040,6 +1041,14 @@
                 : label;
         }
 
+        function shouldUseOriginalPreview(record) {
+            if (!record) return true;
+            return record.style === 'original'
+                || record.generationFailed
+                || !record.generatedImageUrl
+                || record.generatedImageUrl === record.originalImageUrl;
+        }
+
         function actionLabel(actionType) {
             if (actionType === 'received') return '收到';
             if (actionType === 'sent') return '送出';
@@ -1127,15 +1136,23 @@
             image.src = nextSrc || fallback;
         }
 
+        function setGeneratedPreviewState(active, title = '正在打开生成图', detail = '图片已经生成，正在载入高清版本。') {
+            const state = document.getElementById('generated-preview-state');
+            const titleEl = document.getElementById('generated-preview-state-title');
+            const detailEl = document.getElementById('generated-preview-state-detail');
+            if (titleEl) titleEl.innerText = title;
+            if (detailEl) detailEl.innerText = detail;
+            if (state) state.classList.toggle('active', Boolean(active));
+        }
+
         function setGeneratedPreviewPlaceholder(src = '') {
             const preview = document.getElementById('generated-preview');
-            const state = document.getElementById('generated-preview-state');
             if (!preview) return;
             generatedPreviewLoadToken += 1;
             preview.onload = null;
             preview.onerror = null;
             preview.style.opacity = '0';
-            if (state) state.classList.remove('active');
+            setGeneratedPreviewState(false);
 
             const placeholder = displayImageUrl(src);
             if (!placeholder) {
@@ -1158,7 +1175,6 @@
 
         function preloadGeneratedPreview(src, fallbackSrc = '', options = {}) {
             const preview = document.getElementById('generated-preview');
-            const state = document.getElementById('generated-preview-state');
             if (!preview) return;
 
             const token = generatedPreviewLoadToken + 1;
@@ -1166,15 +1182,18 @@
             const nextSrc = displayImageUrl(src);
             const fallback = displayImageUrl(fallbackSrc);
             const showFallbackWhileLoading = options.showFallbackWhileLoading === true;
+            const allowFallbackOnError = options.allowFallbackOnError === true;
 
             preview.onload = null;
             preview.onerror = null;
             preview.style.opacity = '0';
             preview.removeAttribute('src');
 
-            if (state) {
-                state.classList.toggle('active', Boolean(nextSrc && nextSrc !== fallback && !showFallbackWhileLoading));
-            }
+            setGeneratedPreviewState(
+                Boolean(nextSrc && nextSrc !== fallback && !showFallbackWhileLoading),
+                '正在打开生成图',
+                '图片已经生成，正在载入高清版本。'
+            );
 
             if (fallback && showFallbackWhileLoading) {
                 preview.onload = () => {
@@ -1195,17 +1214,22 @@
                 preview.onload = () => {
                     if (generatedPreviewLoadToken === token) {
                         preview.style.opacity = '1';
-                        if (state) state.classList.remove('active');
+                        setGeneratedPreviewState(false);
                     }
                 };
                 preview.onerror = () => {
                     if (generatedPreviewLoadToken !== token) return;
-                    if (state) state.classList.remove('active');
-                    if (fallback) {
+                    if (fallback && allowFallbackOnError) {
+                        setGeneratedPreviewState(false);
                         preview.src = fallback;
                         preview.style.opacity = '1';
                     } else {
                         preview.removeAttribute('src');
+                        setGeneratedPreviewState(
+                            true,
+                            '生成图暂时打不开',
+                            '图片已经返回，但当前网络没有载入成功。请重试生成，或稍后再试。'
+                        );
                     }
                 };
                 requestAnimationFrame(() => {
@@ -1214,10 +1238,16 @@
             };
             loader.onerror = () => {
                 if (generatedPreviewLoadToken !== token) return;
-                if (state) state.classList.remove('active');
-                if (fallback) {
+                if (fallback && allowFallbackOnError) {
+                    setGeneratedPreviewState(false);
                     preview.src = fallback;
                     preview.style.opacity = '1';
+                } else {
+                    setGeneratedPreviewState(
+                        true,
+                        '生成图暂时打不开',
+                        '图片已经返回，但当前网络没有载入成功。请重试生成，或稍后再试。'
+                    );
                 }
             };
             loader.src = nextSrc;
@@ -1754,30 +1784,40 @@
             if (data.analysisGenerationFailed) {
                 throw new Error('花朵识别失败，请重试。');
             }
-            if (data.imageGenerationFailed && appState.visualStyle !== 'original') {
-                showToast('生图暂时没成功，先展示原图，可以继续重试。');
-            }
             const flowerDetails = data.flower_details || [];
+            const imageDidFallback = appState.visualStyle !== 'original' && (
+                data.imageGenerationFailed
+                || !data.generatedImageUrl
+                || data.generatedImageUrl === data.originalImageUrl
+            );
+            if (imageDidFallback) {
+                showToast('生图暂时没成功，请重试。');
+            }
             console.info('[flora] generation result', {
                 style: data.style,
                 imageGenerationFailed: data.imageGenerationFailed,
                 originalImageUrl: data.originalImageUrl,
-                generatedImageUrl: data.generatedImageUrl
+                generatedImageUrl: data.generatedImageUrl,
+                imageDidFallback
             });
             return ensureLocalId({
                 title: data.title,
-                image: appState.visualStyle === 'original'
+                image: appState.visualStyle === 'original' || imageDidFallback
                     ? appState.photoDataUrl
-                    : data.generatedImageUrl || data.originalImageUrl || appState.photoDataUrl,
+                    : data.generatedImageUrl,
                 originalImageUrl: data.originalImageUrl || originalImageUrl,
-                generatedImageUrl: data.generatedImageUrl || originalImageUrl,
+                generatedImageUrl: imageDidFallback
+                    ? (data.originalImageUrl || originalImageUrl)
+                    : (data.generatedImageUrl || originalImageUrl),
                 actionType: data.actionType || appState.actionType,
                 date: new Date(data.recordDate || appState.selectedDate),
                 style: data.style || appState.visualStyle,
                 flowerDetails,
                 tags: flowerDetailsToTags(flowerDetails),
                 comment: data.comment,
-                story: storyInput
+                story: storyInput,
+                generationFailed: imageDidFallback,
+                imageGenerationFailed: imageDidFallback
             });
         }
 
@@ -2214,11 +2254,19 @@
             picker.value = formatDateKey(appState.selectedDate);
 
             const openPicker = () => {
-                if (typeof picker.showPicker === 'function') {
-                    picker.showPicker();
-                } else {
-                    picker.click();
+                try {
+                    if (typeof picker.showPicker === 'function') {
+                        picker.showPicker();
+                    } else {
+                        picker.click();
+                    }
+                } catch (error) {
+                    showToast('点不开日历时，可左右滑动或点两侧箭头切换日期。');
                 }
+                window.clearTimeout(openPicker.hintTimer);
+                openPicker.hintTimer = window.setTimeout(() => {
+                    showToast('也可以左右滑动日期卡片，或点两侧箭头切换日期。');
+                }, 700);
             };
 
             trigger.addEventListener('click', openPicker);
@@ -2232,6 +2280,7 @@
                 });
             }
             picker.addEventListener('change', () => {
+                window.clearTimeout(openPicker.hintTimer);
                 if (!picker.value) return;
                 const selected = startOfLocalDay(new Date(`${picker.value}T00:00:00`));
                 setSelectedDate(selected);
@@ -2448,8 +2497,10 @@
             if (useOriginal) {
                 setGeneratedPreviewPlaceholder(appState.photoDataUrl);
             } else {
+                const useOriginalPreview = shouldUseOriginalPreview(record);
                 preloadGeneratedPreview(record.image, appState.photoDataUrl, {
-                    showFallbackWhileLoading: record.style === 'original' || record.generatedImageUrl === record.originalImageUrl
+                    showFallbackWhileLoading: useOriginalPreview,
+                    allowFallbackOnError: useOriginalPreview
                 });
             }
             if (label) label.innerText = useOriginal ? '原图预览' : styleTag(record.style, record.generatedImageUrl, record.originalImageUrl);
@@ -2460,8 +2511,10 @@
             if (!record) return;
 
             appState.isSavingGeneratedRecord = false;
+            const useOriginalPreview = shouldUseOriginalPreview(record);
             preloadGeneratedPreview(record.image, appState.photoDataUrl, {
-                showFallbackWhileLoading: record.style === 'original' || record.generatedImageUrl === record.originalImageUrl
+                showFallbackWhileLoading: useOriginalPreview,
+                allowFallbackOnError: useOriginalPreview
             });
             document.getElementById('generated-style-label').innerText = styleTag(record.style, record.generatedImageUrl, record.originalImageUrl);
             document.getElementById('generated-title').innerText = record.title;
