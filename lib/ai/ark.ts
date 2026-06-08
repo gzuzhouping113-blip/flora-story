@@ -1,15 +1,56 @@
-import { env, assertArkReady } from "@/lib/env";
+import { assertArkReady, env } from "@/lib/env";
 import { loadImagePrompt, loadVisionPrompt } from "@/lib/prompts";
 import { aiAnalysisSchema, type AiAnalysis, type GenerateRecordRequest, type Style } from "@/lib/validation";
-import { localImageUrlToDataUrl, mirrorRemoteImageToStorage } from "@/lib/storage";
+import { localImageUrlToDataUrl, mirrorRemoteImageToStorage, saveGeneratedImageDataUrl } from "@/lib/storage";
+
+const arkVisionTimeoutMs = 45_000;
+const arkImageTimeoutMs = 105_000;
+
+type JsonObject = Record<string, unknown>;
 
 function absoluteImageUrl(url: string) {
-  if (/^https?:\/\//i.test(url)) return url;
+  if (/^https?:\/\//i.test(url) || url.startsWith("data:")) return url;
   return `${env.publicAppUrl}${url.startsWith("/") ? url : `/${url}`}`;
 }
 
 async function arkImageInput(url: string) {
   return await localImageUrlToDataUrl(url) || absoluteImageUrl(url);
+}
+
+async function fetchArkJson(input: { url: string; body: unknown; timeoutMs: number }) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), input.timeoutMs);
+  try {
+    const response = await fetch(input.url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${env.arkApiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(input.body),
+      signal: controller.signal
+    });
+
+    const text = await response.text();
+    let data: unknown = {};
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch {
+      data = { raw: text };
+    }
+
+    if (!response.ok) {
+      throw new Error(`Ark API failed: ${response.status} ${text.slice(0, 800)}`);
+    }
+    return data;
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error(`Ark API request timed out after ${Math.round(input.timeoutMs / 1000)}s.`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function stripJsonFence(text: string) {
@@ -22,26 +63,78 @@ function stripJsonFence(text: string) {
 }
 
 function extractResponseText(data: unknown): string {
-  const obj = data as {
-    output_text?: string;
-    output?: Array<{
-      content?: Array<{ text?: string; type?: string }>;
-    }>;
-    choices?: Array<{
-      message?: { content?: string | Array<{ text?: string }> };
-    }>;
+  const normalizeContent = (content: unknown): string => {
+    if (!content) return "";
+    if (typeof content === "string") return content;
+    if (Array.isArray(content)) {
+      return content.map(item => {
+        if (!item) return "";
+        if (typeof item === "string") return item;
+        const obj = item as { text?: unknown; content?: unknown; output_text?: unknown };
+        return normalizeContent(obj.text || obj.content || obj.output_text);
+      }).join("");
+    }
+    if (typeof content === "object") {
+      const obj = content as { text?: unknown; content?: unknown; output_text?: unknown };
+      return normalizeContent(obj.text || obj.content || obj.output_text);
+    }
+    return String(content);
   };
 
-  if (obj.output_text) return obj.output_text;
-  const outputText = obj.output?.flatMap(item => item.content || []).map(item => item.text).filter(Boolean).join("");
+  const obj = data as {
+    output_text?: string;
+    text?: string;
+    content?: unknown;
+    result?: string;
+    raw?: string;
+    output?: Array<{ content?: Array<{ text?: string; content?: string }> }>;
+    choices?: Array<{ message?: { content?: string | Array<{ text?: string; content?: string }> } }>;
+  };
+
+  if (obj.output_text) {
+    const outputText = normalizeContent(obj.output_text);
+    if (outputText) return outputText;
+  }
+  if (obj.text) {
+    const text = normalizeContent(obj.text);
+    if (text) return text;
+  }
+  if (obj.content) {
+    const contentText = normalizeContent(obj.content);
+    if (contentText) return contentText;
+  }
+  if (obj.result) {
+    const result = normalizeContent(obj.result);
+    if (result) return result;
+  }
+  if (obj.raw) {
+    const raw = normalizeContent(obj.raw);
+    if (raw) return raw;
+  }
+
+  const outputText = obj.output
+    ?.flatMap(item => item.content || [])
+    .map(item => item.text || item.content)
+    .filter(Boolean)
+    .join("");
   if (outputText) return outputText;
 
-  const content = obj.choices?.[0]?.message?.content;
-  if (typeof content === "string") return content;
-  if (Array.isArray(content)) {
-    return content.map(item => item.text || "").join("");
+  const content = normalizeContent(obj.choices?.[0]?.message?.content);
+  if (content) return content;
+
+  throw new Error("Ark vision model returned empty content.");
+}
+
+function parseVisionJson(payload: unknown) {
+  const text = stripJsonFence(extractResponseText(payload));
+  try {
+    return JSON.parse(text);
+  } catch {
+    const first = text.indexOf("{");
+    const last = text.lastIndexOf("}");
+    if (first >= 0 && last > first) return JSON.parse(text.slice(first, last + 1));
+    throw new Error("Ark vision model returned invalid JSON.");
   }
-  throw new Error("豆包视觉模型返回为空。");
 }
 
 export async function analyzeBouquetWithArk(input: GenerateRecordRequest & { recentTitles?: string[] }): Promise<AiAnalysis> {
@@ -53,42 +146,25 @@ export async function analyzeBouquetWithArk(input: GenerateRecordRequest & { rec
   });
   const imageUrl = await arkImageInput(input.originalImageUrl);
 
-  const response = await fetch(`${env.arkBaseUrl}/responses`, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${env.arkApiKey}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
+  const raw = await fetchArkJson({
+    url: `${env.arkBaseUrl}/responses`,
+    timeoutMs: arkVisionTimeoutMs,
+    body: {
       model: env.arkVisionModel,
       input: [
         {
           role: "user",
           content: [
-            {
-              type: "input_image",
-              image_url: imageUrl
-            },
-            {
-              type: "input_text",
-              text: prompt
-            }
+            { type: "input_image", image_url: imageUrl },
+            { type: "input_text", text: prompt }
           ]
         }
       ],
       text: { format: { type: "json_object" } }
-    })
+    }
   });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`豆包视觉识别失败：${response.status} ${errorText}`);
-  }
-
-  const raw = await response.json();
-  const text = stripJsonFence(extractResponseText(raw));
-  const parsed = JSON.parse(text);
-  return aiAnalysisSchema.parse(parsed);
+  return aiAnalysisSchema.parse(parseVisionJson(raw));
 }
 
 export async function generateImageWithArk(input: {
@@ -98,13 +174,10 @@ export async function generateImageWithArk(input: {
   assertArkReady();
   const prompt = await loadImagePrompt(input.style);
   const imageUrl = await arkImageInput(input.originalImageUrl);
-  const response = await fetch(`${env.arkBaseUrl}/images/generations`, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${env.arkApiKey}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
+  const payload = await fetchArkJson({
+    url: `${env.arkBaseUrl}/images/generations`,
+    timeoutMs: arkImageTimeoutMs,
+    body: {
       model: env.arkImageModel,
       prompt,
       image: imageUrl,
@@ -113,20 +186,26 @@ export async function generateImageWithArk(input: {
       size: "2K",
       stream: false,
       watermark: false
-    })
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`豆包图生图失败：${response.status} ${errorText}`);
-  }
-
-  const payload = await response.json() as {
+    }
+  }) as {
     data?: Array<{ url?: string; b64_json?: string }>;
+    images?: Array<{ url?: string; b64_json?: string }>;
+    url?: string;
+    b64_json?: string;
+    image?: string;
   };
-  const generatedUrl = payload.data?.[0]?.url;
-  if (!generatedUrl) {
-    throw new Error("豆包图生图没有返回图片 URL。");
+
+  const candidate = payload.data?.[0] || payload.images?.[0] || payload;
+  const b64Json = candidate.b64_json || (typeof payload.image === "string" && !/^https?:\/\//i.test(payload.image) ? payload.image : "");
+  const generatedUrl = candidate.url || (typeof payload.image === "string" && /^https?:\/\//i.test(payload.image) ? payload.image : "");
+
+  if (b64Json) {
+    return saveGeneratedImageDataUrl(b64Json.startsWith("data:") ? b64Json : `data:image/png;base64,${b64Json}`);
   }
-  return mirrorRemoteImageToStorage(generatedUrl);
+  if (generatedUrl) {
+    if (generatedUrl.startsWith("data:")) return saveGeneratedImageDataUrl(generatedUrl);
+    return mirrorRemoteImageToStorage(generatedUrl);
+  }
+
+  throw new Error("Ark image API did not return a usable image.");
 }

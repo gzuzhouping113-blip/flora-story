@@ -17,7 +17,7 @@ import type { AiAnalysis, GenerateRecordRequest } from "@/lib/validation";
 import { generateRecordRequestSchema } from "@/lib/validation";
 
 export const runtime = "nodejs";
-export const maxDuration = 300;
+export const maxDuration = 120;
 
 async function analyzeWithProvider(input: GenerateRecordRequest & { recentTitles?: string[] }) {
   if (env.aiProvider === "ark") return analyzeBouquetWithArk(input);
@@ -26,49 +26,24 @@ async function analyzeWithProvider(input: GenerateRecordRequest & { recentTitles
 }
 
 async function analyzeWithTitleAudit(input: GenerateRecordRequest, recentTitles: string[]) {
-  const errors: string[] = [];
-  let bestAnalysis: AiAnalysis | null = null;
-  let bestSimilarity = Infinity;
-
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    try {
-      const analysis = await analyzeWithProvider({
-        ...input,
-        recentTitles: attempt === 0
-          ? recentTitles
-          : [
-              ...recentTitles,
-              `上一次生成的标题“${bestAnalysis?.title || ""}”相似度过高，请换一种完全不同的意象。`
-            ]
-      });
-      const similarity = maxTitleSimilarity(analysis.title, recentTitles);
-      if (similarity < bestSimilarity) {
-        bestAnalysis = analysis;
-        bestSimilarity = similarity;
-      }
-      if (similarity < 0.8) {
-        return { analysis, titleSimilarity: similarity, titleRegenerated: attempt > 0 };
-      }
-    } catch (error) {
-      errors.push(error instanceof Error ? error.message : String(error));
-    }
-  }
-
-  if (bestAnalysis) {
-    const fallbackTitle = chooseDistinctFallbackTitle(recentTitles, bestAnalysis.title);
+  const analysis = await analyzeWithProvider({
+    ...input,
+    recentTitles
+  });
+  const similarity = maxTitleSimilarity(analysis.title, recentTitles);
+  if (similarity >= 0.8) {
+    const fallbackTitle = chooseDistinctFallbackTitle(recentTitles, analysis.title);
     return {
       analysis: {
-        ...bestAnalysis,
+        ...analysis,
         title: fallbackTitle
       },
       titleSimilarity: maxTitleSimilarity(fallbackTitle, recentTitles),
       titleRegenerated: true
     };
   }
-
-  throw new Error(errors.join(" | ") || "标题生成失败。");
+  return { analysis, titleSimilarity: similarity, titleRegenerated: false };
 }
-
 export async function POST(request: Request) {
   try {
     const user = await getCurrentUser();
