@@ -989,7 +989,7 @@
         function actionBadgeColor(actionType) {
             if (actionType === 'received') return 'bg-primary/90';
             if (actionType === 'sent') return 'bg-[#86868B]/80';
-            if (actionType === 'self') return 'bg-[#A67684]/85';
+            if (actionType === 'self') return 'bg-primary/90';
             return 'bg-[#86868B]/80';
         }
 
@@ -1267,11 +1267,12 @@
             context.fillText(dateText, imageX + 27, imageY + 29);
             context.fillStyle = record.actionType === 'received'
                 ? 'rgba(210, 165, 179, 0.92)'
-                : (record.actionType === 'self' ? 'rgba(166, 118, 132, 0.9)' : 'rgba(134, 134, 139, 0.86)');
-            roundedRect(context, imageX + imageWidth - 72, imageY + 14, 58, 30, 15);
+                : (record.actionType === 'self' ? 'rgba(210, 165, 179, 0.92)' : 'rgba(134, 134, 139, 0.86)');
+            const actionBadgeWidth = actionText.length > 2 ? 68 : 58;
+            roundedRect(context, imageX + imageWidth - actionBadgeWidth - 14, imageY + 14, actionBadgeWidth, 30, 15);
             context.fill();
             context.fillStyle = '#FFFFFF';
-            context.fillText(actionText, imageX + imageWidth - 59, imageY + 29);
+            context.fillText(actionText, imageX + imageWidth - actionBadgeWidth - 1, imageY + 29);
 
             const textX = cardX + padding;
             let textY = imageY + imageHeight + 44;
