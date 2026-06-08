@@ -360,6 +360,14 @@
             opacity: 0;
             transition: opacity 0.18s ease;
         }
+        .generated-preview-state {
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.18s ease;
+        }
+        .generated-preview-state.active {
+            opacity: 1;
+        }
         .flora-page-button {
             width: 26px;
             height: 26px;
@@ -816,6 +824,11 @@
                     <div class="bg-white rounded-3xl p-4 shadow-sm border border-gray-100 mb-6 mt-4">
                         <div class="relative mx-auto mb-3 aspect-[3/4] w-full max-w-[380px] max-h-[58vh] overflow-hidden rounded-2xl bg-[#F8F6F4] shadow-sm">
                             <img id="generated-preview" class="w-full h-full object-contain" alt="Generated">
+                            <div id="generated-preview-state" class="generated-preview-state absolute inset-0 flex flex-col items-center justify-center bg-[#F8F6F4] text-center px-6">
+                                <div class="h-8 w-8 rounded-full border-2 border-primary-light border-t-primary animate-spin mb-3"></div>
+                                <p class="text-xs font-bold text-primary-dark">正在打开生成图</p>
+                                <p class="mt-1 text-[11px] text-[#86868B] leading-relaxed">图片已经生成，正在载入高清版本。</p>
+                            </div>
                             <button id="peek-original-button" type="button" class="absolute left-2 top-2 rounded-full bg-white/90 px-3 py-1 text-[10px] font-bold text-primary-dark shadow-sm backdrop-blur">按住看原图</button>
                             <span id="generated-style-label" class="absolute right-2 top-2 rounded-full bg-[#1D1D1F]/70 px-2.5 py-1 text-[10px] font-bold text-white shadow-sm">治愈水彩</span>
                         </div>
@@ -1092,6 +1105,9 @@
                 if (url.origin === window.location.origin) {
                     return `${url.pathname}${url.search}${url.hash}`;
                 }
+                if (url.hostname === 'res.cloudinary.com') {
+                    return url.href;
+                }
                 return `/api/image-proxy?url=${encodeURIComponent(url.href)}`;
             } catch {
                 return src;
@@ -1113,11 +1129,13 @@
 
         function setGeneratedPreviewPlaceholder(src = '') {
             const preview = document.getElementById('generated-preview');
+            const state = document.getElementById('generated-preview-state');
             if (!preview) return;
             generatedPreviewLoadToken += 1;
             preview.onload = null;
             preview.onerror = null;
             preview.style.opacity = '0';
+            if (state) state.classList.remove('active');
 
             const placeholder = displayImageUrl(src);
             if (!placeholder) {
@@ -1138,21 +1156,27 @@
             }
         }
 
-        function preloadGeneratedPreview(src, fallbackSrc = '') {
+        function preloadGeneratedPreview(src, fallbackSrc = '', options = {}) {
             const preview = document.getElementById('generated-preview');
+            const state = document.getElementById('generated-preview-state');
             if (!preview) return;
 
             const token = generatedPreviewLoadToken + 1;
             generatedPreviewLoadToken = token;
             const nextSrc = displayImageUrl(src);
             const fallback = displayImageUrl(fallbackSrc);
+            const showFallbackWhileLoading = options.showFallbackWhileLoading === true;
 
             preview.onload = null;
             preview.onerror = null;
             preview.style.opacity = '0';
             preview.removeAttribute('src');
 
-            if (fallback) {
+            if (state) {
+                state.classList.toggle('active', Boolean(nextSrc && nextSrc !== fallback && !showFallbackWhileLoading));
+            }
+
+            if (fallback && showFallbackWhileLoading) {
                 preview.onload = () => {
                     if (generatedPreviewLoadToken === token) preview.style.opacity = '1';
                 };
@@ -1169,10 +1193,14 @@
                 if (generatedPreviewLoadToken !== token) return;
                 preview.style.opacity = '0';
                 preview.onload = () => {
-                    if (generatedPreviewLoadToken === token) preview.style.opacity = '1';
+                    if (generatedPreviewLoadToken === token) {
+                        preview.style.opacity = '1';
+                        if (state) state.classList.remove('active');
+                    }
                 };
                 preview.onerror = () => {
                     if (generatedPreviewLoadToken !== token) return;
+                    if (state) state.classList.remove('active');
                     if (fallback) {
                         preview.src = fallback;
                         preview.style.opacity = '1';
@@ -1186,6 +1214,7 @@
             };
             loader.onerror = () => {
                 if (generatedPreviewLoadToken !== token) return;
+                if (state) state.classList.remove('active');
                 if (fallback) {
                     preview.src = fallback;
                     preview.style.opacity = '1';
@@ -1729,6 +1758,12 @@
                 showToast('生图暂时没成功，先展示原图，可以继续重试。');
             }
             const flowerDetails = data.flower_details || [];
+            console.info('[flora] generation result', {
+                style: data.style,
+                imageGenerationFailed: data.imageGenerationFailed,
+                originalImageUrl: data.originalImageUrl,
+                generatedImageUrl: data.generatedImageUrl
+            });
             return ensureLocalId({
                 title: data.title,
                 image: appState.visualStyle === 'original'
@@ -2413,7 +2448,9 @@
             if (useOriginal) {
                 setGeneratedPreviewPlaceholder(appState.photoDataUrl);
             } else {
-                preloadGeneratedPreview(record.image, appState.photoDataUrl);
+                preloadGeneratedPreview(record.image, appState.photoDataUrl, {
+                    showFallbackWhileLoading: record.style === 'original' || record.generatedImageUrl === record.originalImageUrl
+                });
             }
             if (label) label.innerText = useOriginal ? '原图预览' : styleTag(record.style, record.generatedImageUrl, record.originalImageUrl);
         }
@@ -2423,7 +2460,9 @@
             if (!record) return;
 
             appState.isSavingGeneratedRecord = false;
-            preloadGeneratedPreview(record.image, appState.photoDataUrl);
+            preloadGeneratedPreview(record.image, appState.photoDataUrl, {
+                showFallbackWhileLoading: record.style === 'original' || record.generatedImageUrl === record.originalImageUrl
+            });
             document.getElementById('generated-style-label').innerText = styleTag(record.style, record.generatedImageUrl, record.originalImageUrl);
             document.getElementById('generated-title').innerText = record.title;
             document.getElementById('generated-comment').innerText = `“${record.comment}”`;
