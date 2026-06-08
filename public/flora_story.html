@@ -87,6 +87,23 @@
             cursor: grabbing;
             transform: scale(0.98);
         }
+        .date-step-button {
+            width: 34px;
+            height: 34px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 999px;
+            color: rgba(166, 118, 132, 0.78);
+            background: rgba(255, 255, 255, 0.62);
+            font-size: 22px;
+            line-height: 1;
+            transition: background 0.2s ease, transform 0.2s ease;
+        }
+        .date-step-button:active {
+            background: rgba(246, 235, 237, 0.95);
+            transform: scale(0.94);
+        }
         .style-option.selected {
             background: #F6EBED;
             border-color: #D2A5B3;
@@ -715,12 +732,12 @@
                             <input id="date-picker-input" type="date" class="sr-only" aria-label="选择花开日期">
                         </div>
                         <div id="date-drag-card" class="date-card glass-card bg-white/80 border border-white rounded-3xl shadow-glass px-4 py-4 flex items-center justify-between cursor-grab transition-transform">
-                            <span class="text-primary-dark/60 text-xl">‹</span>
+                            <button id="date-prev-button" type="button" class="date-step-button" aria-label="前一天">‹</button>
                             <div class="text-center">
                                 <p id="date-main-label" class="font-serif font-bold text-xl text-[#1D1D1F]">2026.05.30</p>
                                 <p id="date-week-label" class="text-xs text-[#86868B] mt-1">周六</p>
                             </div>
-                            <span class="text-primary-dark/60 text-xl">›</span>
+                            <button id="date-next-button" type="button" class="date-step-button" aria-label="后一天">›</button>
                         </div>
                     </div>
 
@@ -891,6 +908,9 @@
     <!-- 交互逻辑脚本 -->
     <script>
         const MS_PER_DAY = 24 * 60 * 60 * 1000;
+        const MOBILE_UPLOAD_MAX_EDGE = 1800;
+        const MOBILE_UPLOAD_JPEG_QUALITY = 0.86;
+        const MAX_CLIENT_UPLOAD_BYTES = 6 * 1024 * 1024;
         const today = startOfLocalDay(new Date());
         const appState = {
             actionType: 'received',
@@ -1758,6 +1778,21 @@
             }
         }
 
+        function setSelectedDate(date, options = {}) {
+            const selected = startOfLocalDay(date);
+            if (selected > today) {
+                appState.selectedDate = new Date(today);
+                if (!options.silent) showToast('花还没有开到那一天。');
+            } else {
+                appState.selectedDate = selected;
+            }
+            updateDateLabels();
+        }
+
+        function shiftSelectedDate(offsetDays) {
+            setSelectedDate(new Date(appState.selectedDate.getTime() + offsetDays * MS_PER_DAY));
+        }
+
         function switchTab(tab) {
             const timeline = document.getElementById('view-timeline');
             const stats = document.getElementById('view-stats');
@@ -1928,28 +1963,100 @@
             document.getElementById('wizard-next-button').disabled = !appState.photoDataUrl;
         }
 
+        function isProbablyImageFile(file) {
+            return Boolean(file && (
+                file.type.startsWith('image/')
+                || /\.(heic|heif|jpg|jpeg|png|webp)$/i.test(file.name || '')
+            ));
+        }
+
+        function loadImageFromFile(file) {
+            return new Promise((resolve, reject) => {
+                const url = URL.createObjectURL(file);
+                const image = new Image();
+                image.onload = () => {
+                    URL.revokeObjectURL(url);
+                    resolve(image);
+                };
+                image.onerror = () => {
+                    URL.revokeObjectURL(url);
+                    reject(new Error('这张照片暂时无法读取，请换一张 JPG/PNG，或在相册里先编辑保存一次。'));
+                };
+                image.src = url;
+            });
+        }
+
+        function canvasToBlob(canvas, type, quality) {
+            return new Promise(resolve => canvas.toBlob(resolve, type, quality));
+        }
+
+        async function prepareImageForUpload(file) {
+            if (!isProbablyImageFile(file)) {
+                throw new Error('请选择一张鲜花照片。');
+            }
+
+            const shouldCompress = file.size > MAX_CLIENT_UPLOAD_BYTES
+                || !['image/jpeg', 'image/png', 'image/webp'].includes(file.type)
+                || /heic|heif/i.test(file.type || file.name || '');
+
+            if (!shouldCompress) {
+                return {
+                    file,
+                    previewUrl: await new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = () => resolve(reader.result);
+                        reader.onerror = () => reject(new Error('照片读取失败，请重新选择。'));
+                        reader.readAsDataURL(file);
+                    })
+                };
+            }
+
+            const image = await loadImageFromFile(file);
+            const ratio = Math.min(1, MOBILE_UPLOAD_MAX_EDGE / Math.max(image.naturalWidth, image.naturalHeight));
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.max(1, Math.round(image.naturalWidth * ratio));
+            canvas.height = Math.max(1, Math.round(image.naturalHeight * ratio));
+            const context = canvas.getContext('2d');
+            context.fillStyle = '#FFFFFF';
+            context.fillRect(0, 0, canvas.width, canvas.height);
+            context.drawImage(image, 0, 0, canvas.width, canvas.height);
+            const blob = await canvasToBlob(canvas, 'image/jpeg', MOBILE_UPLOAD_JPEG_QUALITY);
+            if (!blob) throw new Error('照片压缩失败，请换一张照片。');
+            const compressedFile = new File(
+                [blob],
+                `${(file.name || 'bouquet').replace(/\.[^.]+$/, '')}.jpg`,
+                { type: 'image/jpeg' }
+            );
+            return {
+                file: compressedFile,
+                previewUrl: canvas.toDataURL('image/jpeg', MOBILE_UPLOAD_JPEG_QUALITY)
+            };
+        }
+
         function bindUploadInput() {
             const input = document.getElementById('flower-file-input');
-            input.addEventListener('change', event => {
+            input.addEventListener('change', async event => {
                 const file = event.target.files && event.target.files[0];
                 if (!file) return;
-                if (!file.type.startsWith('image/')) {
-                    showToast('请选择一张鲜花照片。');
-                    return;
-                }
-                appState.photoFile = file;
-                appState.uploadedImageUrl = '';
-                const reader = new FileReader();
-                reader.onload = () => {
-                    appState.photoDataUrl = reader.result;
+                try {
+                    showToast('正在读取照片...');
+                    const prepared = await prepareImageForUpload(file);
+                    appState.photoFile = prepared.file;
+                    appState.uploadedImageUrl = '';
+                    appState.photoDataUrl = prepared.previewUrl;
                     const preview = document.getElementById('upload-preview');
                     preview.src = appState.photoDataUrl;
                     preview.classList.remove('hidden');
                     document.getElementById('upload-placeholder').classList.add('hidden');
                     document.getElementById('upload-change-chip').classList.remove('hidden');
                     updateNextButton();
-                };
-                reader.readAsDataURL(file);
+                } catch (error) {
+                    input.value = '';
+                    appState.photoFile = null;
+                    appState.photoDataUrl = '';
+                    updateNextButton();
+                    showToast(error.message || '照片读取失败，请重新选择。');
+                }
             });
         }
 
@@ -1968,12 +2075,13 @@
             let futureToastShown = false;
 
             card.addEventListener('pointerdown', event => {
+                if (event.target.closest('button')) return;
                 startX = event.clientX;
                 startDate = new Date(appState.selectedDate);
                 didDrag = false;
                 futureToastShown = false;
                 card.classList.add('dragging');
-                card.setPointerCapture(event.pointerId);
+                try { card.setPointerCapture(event.pointerId); } catch (error) {}
             });
 
             card.addEventListener('pointermove', event => {
@@ -1984,15 +2092,14 @@
                 const nextDate = new Date(startDate.getTime() + offsetDays * MS_PER_DAY);
 
                 if (nextDate > today) {
-                    appState.selectedDate = new Date(today);
+                    setSelectedDate(today, { silent: true });
                     if (!futureToastShown) {
                         showToast('花还没有开到那一天。');
                         futureToastShown = true;
                     }
                 } else {
-                    appState.selectedDate = startOfLocalDay(nextDate);
+                    setSelectedDate(nextDate, { silent: true });
                 }
-                updateDateLabels();
             });
 
             const endDrag = event => {
@@ -2006,6 +2113,61 @@
 
             card.addEventListener('pointerup', endDrag);
             card.addEventListener('pointercancel', endDrag);
+
+            card.addEventListener('touchstart', event => {
+                if (event.target.closest('button')) return;
+                const touch = event.touches && event.touches[0];
+                if (!touch) return;
+                startX = touch.clientX;
+                startDate = new Date(appState.selectedDate);
+                didDrag = false;
+                futureToastShown = false;
+                card.classList.add('dragging');
+            }, { passive: true });
+
+            card.addEventListener('touchmove', event => {
+                if (startX === null) return;
+                const touch = event.touches && event.touches[0];
+                if (!touch) return;
+                const delta = touch.clientX - startX;
+                if (Math.abs(delta) > 8) didDrag = true;
+                const offsetDays = Math.round(delta / 46);
+                const nextDate = new Date(startDate.getTime() + offsetDays * MS_PER_DAY);
+                if (nextDate > today) {
+                    setSelectedDate(today, { silent: true });
+                    if (!futureToastShown) {
+                        showToast('花还没有开到那一天。');
+                        futureToastShown = true;
+                    }
+                } else {
+                    setSelectedDate(nextDate, { silent: true });
+                }
+            }, { passive: true });
+
+            card.addEventListener('touchend', () => {
+                if (startX === null) return;
+                startX = null;
+                startDate = null;
+                card.classList.remove('dragging');
+                card.dataset.wasDragged = didDrag ? 'true' : 'false';
+            });
+        }
+
+        function bindDateStepButtons() {
+            const prev = document.getElementById('date-prev-button');
+            const next = document.getElementById('date-next-button');
+            if (prev) {
+                prev.addEventListener('click', event => {
+                    event.stopPropagation();
+                    shiftSelectedDate(-1);
+                });
+            }
+            if (next) {
+                next.addEventListener('click', event => {
+                    event.stopPropagation();
+                    shiftSelectedDate(1);
+                });
+            }
         }
 
         function bindDatePicker() {
@@ -2037,13 +2199,7 @@
             picker.addEventListener('change', () => {
                 if (!picker.value) return;
                 const selected = startOfLocalDay(new Date(`${picker.value}T00:00:00`));
-                if (selected > today) {
-                    appState.selectedDate = new Date(today);
-                    showToast('花还没有开到那一天。');
-                } else {
-                    appState.selectedDate = selected;
-                }
-                updateDateLabels();
+                setSelectedDate(selected);
             });
         }
 
@@ -2810,6 +2966,7 @@
             bindUploadInput();
             bindStoryCounter();
             bindDateDrag();
+            bindDateStepButtons();
             bindDatePicker();
             bindOriginalPeek();
             bindFilters();

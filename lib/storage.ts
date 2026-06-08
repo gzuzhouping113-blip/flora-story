@@ -6,6 +6,23 @@ import { v2 as cloudinary } from "cloudinary";
 import { assertCloudinaryReady, assertR2Ready, env } from "@/lib/env";
 
 const allowedMimeTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
+const maxUploadBytes = 15 * 1024 * 1024;
+
+function normalizeUploadMimeType(file: File) {
+  const rawType = (file.type || "").toLowerCase();
+  if (rawType === "image/jpg" || rawType === "image/pjpeg") return "image/jpeg";
+  if (allowedMimeTypes.has(rawType)) return rawType;
+
+  const ext = path.extname(file.name || "").toLowerCase();
+  if (ext === ".jpg" || ext === ".jpeg") return "image/jpeg";
+  if (ext === ".png") return "image/png";
+  if (ext === ".webp") return "image/webp";
+  if (ext === ".heic" || ext === ".heif" || rawType === "image/heic" || rawType === "image/heif") {
+    throw new Error("iPhone HEIC 照片暂时无法直接上传，请在相册里编辑保存一次，或选择 JPG/PNG 照片。");
+  }
+
+  return rawType;
+}
 
 function extensionFromMime(mimeType: string) {
   if (mimeType.includes("png")) return "png";
@@ -154,8 +171,8 @@ async function uploadBufferToCloudinary(input: {
   };
 }
 
-async function saveUploadedImageLocal(file: File) {
-  const mimeType = file.type;
+async function saveUploadedImageLocal(file: File, normalizedMimeType?: string) {
+  const mimeType = normalizedMimeType || normalizeUploadMimeType(file);
   const key = createObjectKey("original", mimeType);
   const relativePath = key.replace(/^uploads\//, "uploads/");
   const dir = path.join(process.cwd(), "public", "uploads", "original");
@@ -174,19 +191,21 @@ async function saveUploadedImageLocal(file: File) {
 }
 
 export async function saveUploadedImage(file: File) {
-  if (!allowedMimeTypes.has(file.type)) {
+  const mimeType = normalizeUploadMimeType(file);
+
+  if (!allowedMimeTypes.has(mimeType)) {
     throw new Error("只支持 JPG、PNG 或 WebP 图片。");
   }
 
-  if (file.size > 8 * 1024 * 1024) {
-    throw new Error("图片不能超过 8MB。");
+  if (file.size > maxUploadBytes) {
+    throw new Error("图片不能超过 15MB。手机原图太大时，请截图或编辑保存后再上传。");
   }
 
   if (env.storageProvider === "r2") {
     return uploadBufferToR2({
       folder: "original",
       buffer: Buffer.from(await file.arrayBuffer()),
-      mimeType: file.type
+      mimeType
     });
   }
 
@@ -194,11 +213,11 @@ export async function saveUploadedImage(file: File) {
     return uploadBufferToCloudinary({
       folder: "original",
       buffer: Buffer.from(await file.arrayBuffer()),
-      mimeType: file.type
+      mimeType
     });
   }
 
-  return saveUploadedImageLocal(file);
+  return saveUploadedImageLocal(file, mimeType);
 }
 
 export async function mirrorRemoteImageToStorage(remoteUrl: string) {
