@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Flora Story - 专属花历</title>
     
+    <link rel="preconnect" href="https://res.cloudinary.com" crossorigin>
+    <link rel="dns-prefetch" href="//res.cloudinary.com">
     <link href="./flora-tailwind.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@500;700&display=swap" rel="stylesheet">
     
@@ -824,11 +826,11 @@
                 <div id="step-4" class="absolute w-full px-6 left-full transition-all duration-500 opacity-0 pb-10">
                     <div class="bg-white rounded-3xl p-4 shadow-sm border border-gray-100 mb-6 mt-4">
                         <div class="relative mx-auto mb-3 aspect-[3/4] w-full max-w-[380px] max-h-[58vh] overflow-hidden rounded-2xl bg-[#F8F6F4] shadow-sm">
-                            <img id="generated-preview" class="w-full h-full object-contain" alt="Generated">
+                            <img id="generated-preview" class="w-full h-full object-contain" alt="Generated" loading="eager" decoding="async" fetchpriority="high">
                             <div id="generated-preview-state" class="generated-preview-state absolute inset-0 flex flex-col items-center justify-center bg-[#F8F6F4] text-center px-6">
                                 <div class="h-8 w-8 rounded-full border-2 border-primary-light border-t-primary animate-spin mb-3"></div>
-                                <p id="generated-preview-state-title" class="text-xs font-bold text-primary-dark">正在打开生成图</p>
-                                <p id="generated-preview-state-detail" class="mt-1 text-[11px] text-[#86868B] leading-relaxed">图片已经生成，正在载入高清版本。</p>
+                                <p id="generated-preview-state-title" class="text-xs font-bold text-primary-dark">图片已生成，正在加载预览</p>
+                                <p id="generated-preview-state-detail" class="mt-1 text-[11px] text-[#86868B] leading-relaxed">图片已生成，正在加载预览。</p>
                             </div>
                             <button id="peek-original-button" type="button" class="absolute left-2 top-2 rounded-full bg-white/90 px-3 py-1 text-[10px] font-bold text-primary-dark shadow-sm backdrop-blur">按住看原图</button>
                             <span id="generated-style-label" class="absolute right-2 top-2 rounded-full bg-[#1D1D1F]/70 px-2.5 py-1 text-[10px] font-bold text-white shadow-sm">治愈水彩</span>
@@ -1136,7 +1138,7 @@
             image.src = nextSrc || fallback;
         }
 
-        function setGeneratedPreviewState(active, title = '正在打开生成图', detail = '图片已经生成，正在载入高清版本。') {
+        function setGeneratedPreviewState(active, title = '图片已生成，正在加载预览', detail = '图片已生成，正在加载预览。') {
             const state = document.getElementById('generated-preview-state');
             const titleEl = document.getElementById('generated-preview-state-title');
             const detailEl = document.getElementById('generated-preview-state-detail');
@@ -1189,11 +1191,7 @@
             preview.style.opacity = '0';
             preview.removeAttribute('src');
 
-            setGeneratedPreviewState(
-                Boolean(nextSrc && nextSrc !== fallback && !showFallbackWhileLoading),
-                '正在打开生成图',
-                '图片已经生成，正在载入高清版本。'
-            );
+            setGeneratedPreviewState(Boolean(nextSrc && nextSrc !== fallback && !showFallbackWhileLoading));
 
             if (fallback && showFallbackWhileLoading) {
                 preview.onload = () => {
@@ -1206,37 +1204,22 @@
 
             if (!nextSrc || nextSrc === fallback) return;
 
-            const loader = new Image();
-            loader.crossOrigin = 'anonymous';
-            loader.onload = () => {
+            const revealPreview = async () => {
                 if (generatedPreviewLoadToken !== token) return;
-                preview.style.opacity = '0';
-                preview.onload = () => {
-                    if (generatedPreviewLoadToken === token) {
-                        preview.style.opacity = '1';
-                        setGeneratedPreviewState(false);
+                try {
+                    if (typeof preview.decode === 'function') {
+                        await preview.decode();
                     }
-                };
-                preview.onerror = () => {
-                    if (generatedPreviewLoadToken !== token) return;
-                    if (fallback && allowFallbackOnError) {
-                        setGeneratedPreviewState(false);
-                        preview.src = fallback;
-                        preview.style.opacity = '1';
-                    } else {
-                        preview.removeAttribute('src');
-                        setGeneratedPreviewState(
-                            true,
-                            '生成图暂时打不开',
-                            '图片已经返回，但当前网络没有载入成功。请重试生成，或稍后再试。'
-                        );
-                    }
-                };
-                requestAnimationFrame(() => {
-                    if (generatedPreviewLoadToken === token) preview.src = nextSrc;
-                });
+                } catch (error) {}
+                if (generatedPreviewLoadToken !== token) return;
+                preview.style.opacity = '1';
+                setGeneratedPreviewState(false);
             };
-            loader.onerror = () => {
+
+            preview.onload = () => {
+                revealPreview();
+            };
+            preview.onerror = () => {
                 if (generatedPreviewLoadToken !== token) return;
                 if (fallback && allowFallbackOnError) {
                     setGeneratedPreviewState(false);
@@ -1250,7 +1233,7 @@
                     );
                 }
             };
-            loader.src = nextSrc;
+            preview.src = nextSrc;
         }
 
         function loadDrawableImage(src) {
