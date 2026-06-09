@@ -2,36 +2,9 @@ import { NextResponse } from "next/server";
 import { getCurrentUser, withTransientDatabaseRetry } from "@/lib/auth";
 import { rememberFlowerMeanings } from "@/lib/flower-memory";
 import { prisma } from "@/lib/prisma";
+import { toClientRecord } from "@/lib/records";
 import { assertOwnedUpload, markAssetsUsed } from "@/lib/security";
 import { saveRecordRequestSchema } from "@/lib/validation";
-
-function toClientRecord(record: {
-  id: string;
-  title: string;
-  comment: string;
-  story: string | null;
-  actionType: string;
-  recordDate: Date;
-  style: string;
-  originalImageUrl: string;
-  generatedImageUrl: string;
-  flowers: unknown;
-  createdAt: Date;
-}) {
-  return {
-    id: record.id,
-    title: record.title,
-    comment: record.comment,
-    story: record.story || "",
-    actionType: record.actionType,
-    recordDate: record.recordDate.toISOString(),
-    style: record.style,
-    originalImageUrl: record.originalImageUrl,
-    generatedImageUrl: record.generatedImageUrl,
-    flower_details: record.flowers,
-    createdAt: record.createdAt.toISOString()
-  };
-}
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -55,7 +28,7 @@ export async function GET(request: Request) {
           }
         : {})
     },
-    orderBy: { recordDate: "desc" }
+    orderBy: { createdAt: "desc" }
   }));
 
   return NextResponse.json({ records: records.map(toClientRecord) });

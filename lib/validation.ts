@@ -29,6 +29,8 @@ export const generateRecordRequestSchema = z.object({
   style: styleSchema
 });
 
+export const startGenerationRequestSchema = generateRecordRequestSchema;
+
 export const saveRecordRequestSchema = z.object({
   title: z.string().trim().min(1).max(24),
   comment: z.string().trim().min(1).max(80),
@@ -41,8 +43,20 @@ export const saveRecordRequestSchema = z.object({
   flower_details: z.array(flowerDetailSchema).min(1).max(5)
 });
 
+export const updateRecordRequestSchema = z.object({
+  title: z.string().trim().min(1).max(24).optional(),
+  comment: z.string().trim().min(1).max(80).optional(),
+  story: z.string().trim().max(300).optional(),
+  flower_details: z.array(flowerDetailSchema).min(1).max(5).optional()
+});
+
+export const regenerateRecordRequestSchema = z.object({
+  style: styleSchema.exclude(["original"]).optional()
+});
+
 export type Style = z.infer<typeof styleSchema>;
 export type ActionType = z.infer<typeof actionTypeSchema>;
 export type AiAnalysis = z.infer<typeof aiAnalysisSchema>;
 export type GenerateRecordRequest = z.infer<typeof generateRecordRequestSchema>;
 export type SaveRecordRequest = z.infer<typeof saveRecordRequestSchema>;
+export type UpdateRecordRequest = z.infer<typeof updateRecordRequestSchema>;

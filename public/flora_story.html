@@ -251,6 +251,59 @@
             border-radius: 22px;
             padding: 10px;
         }
+        .timeline-card.generating {
+            border-color: rgba(210, 165, 179, 0.5);
+        }
+        .timeline-generating-overlay,
+        .detail-generating-overlay {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            background: rgba(248, 246, 244, 0.88);
+            color: #A67684;
+            text-align: center;
+            padding: 14px;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+        .timeline-generating-spinner,
+        .detail-generating-spinner {
+            width: 26px;
+            height: 26px;
+            border-radius: 999px;
+            border: 2px solid rgba(210, 165, 179, 0.35);
+            border-top-color: #A67684;
+            animation: spin 0.86s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .timeline-generating-copy {
+            font-size: 10px;
+            font-weight: 800;
+            line-height: 1.45;
+        }
+        .detail-status-note {
+            margin: 10px 8px 0;
+            border-radius: 16px;
+            background: rgba(246, 235, 237, 0.7);
+            border: 1px solid rgba(210, 165, 179, 0.36);
+            color: #A67684;
+            font-size: 11px;
+            font-weight: 800;
+            line-height: 1.5;
+            padding: 10px 12px;
+            text-align: center;
+        }
+        .editable-field.editing {
+            outline: 1.5px solid rgba(210, 165, 179, 0.9);
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.76);
+        }
         #timeline-container.empty-state-active {
             min-height: clamp(260px, 42svh, 380px);
             justify-content: center;
@@ -583,6 +636,7 @@
                 <button data-filter-group="action" data-filter-value="self" class="filter-pill flex-1 py-2 rounded-full text-xs font-bold text-[#86868B]">送自己</button>
             </div>
             <div class="flex justify-center gap-2">
+                <button data-filter-group="sort" data-filter-value="recent" class="filter-pill active px-5 py-2 rounded-full text-xs font-bold border border-primary/70 bg-white/90 text-primary-dark">最近</button>
                 <button onclick="toggleYearFilter('2026')" data-filter-group="year" data-filter-value="2026" class="filter-pill year-pill active px-6 py-2 rounded-full text-xs font-bold border border-primary/70 bg-white/90 text-primary-dark">2026</button>
             </div>
         </div>
@@ -884,16 +938,21 @@
                 <div class="bg-white rounded-3xl p-4 shadow-sm border border-gray-100 mb-6">
                     <div class="relative mx-auto aspect-[3/4] w-full max-w-[400px] max-h-[62vh] overflow-hidden rounded-2xl mb-3 bg-[#F8F6F4] shadow-sm">
                         <img id="detail-image" src="" class="w-full h-full object-contain" alt="Flower">
+                        <div id="detail-generating-overlay" class="detail-generating-overlay hidden">
+                            <span class="detail-generating-spinner"></span>
+                            <span class="text-xs font-bold">图片生成中，请稍后</span>
+                        </div>
                         <span id="detail-style" class="absolute right-2 top-2 rounded-full bg-[#1D1D1F]/70 px-2.5 py-1 text-[10px] font-bold text-white shadow-sm">治愈水彩</span>
                     </div>
+                    <div id="detail-status-note" class="detail-status-note hidden">图片生成中，请稍后。完成后会自动替换成生成图。</div>
                     
                     <div class="px-2 mb-6 relative">
                         <span class="absolute -top-1 -left-1 text-2xl text-primary opacity-30 font-serif leading-none">"</span>
-                        <p id="detail-comment" class="text-sm text-gray-600 font-serif italic text-center relative z-10 leading-relaxed px-2"></p>
+                        <p id="detail-comment" class="editable-field text-sm text-gray-600 font-serif italic text-center relative z-10 leading-relaxed px-2"></p>
                     </div>
 
                     <div class="text-center mb-4">
-                        <h3 id="detail-title" class="text-xl font-serif font-bold text-[#1D1D1F] mb-2"></h3>
+                        <h3 id="detail-title" class="editable-field text-xl font-serif font-bold text-[#1D1D1F] mb-2"></h3>
                         <div id="detail-meta" class="hidden items-center justify-center gap-2 text-[11px] text-[#86868B] font-medium">
                             <span id="detail-date"></span>
                             <span class="w-1 h-1 rounded-full bg-primary-light"></span>
@@ -913,6 +972,8 @@
                     </h4>
                     <p id="detail-story" class="text-sm text-[#1D1D1F] leading-relaxed bg-white p-4 rounded-2xl border border-gray-100 shadow-sm min-h-[5rem]"></p>
                     <div class="detail-actions">
+                        <button type="button" id="detail-edit-button" onclick="toggleDetailEdit(event)" class="detail-action-button">编辑</button>
+                        <button type="button" onclick="regenerateDetailRecord(event)" class="detail-action-button">重新生成</button>
                         <button type="button" onclick="downloadDetailCard(event)" class="detail-action-button">下载卡片</button>
                         <button type="button" onclick="deleteDetailRecord(event)" class="detail-action-button delete">删除卡片</button>
                     </div>
@@ -935,14 +996,17 @@
             photoDataUrl: '',
             photoFile: null,
             uploadedImageUrl: '',
-            filters: { action: 'all', year: '2026' },
+            filters: { action: 'all', year: '2026', sort: 'recent' },
             floraPage: 0,
             generatedRecord: null,
             lastFailedRecord: null,
             detailRecord: null,
             currentUser: null,
             records: [],
-            isSavingGeneratedRecord: false
+            isSavingGeneratedRecord: false,
+            generationPollTimer: null,
+            notifiedReadyRecords: new Set(),
+            detailEditMode: false
         };
 
         const loadingTexts = [
@@ -1067,6 +1131,22 @@
 
         function recordIdForDom(record) {
             return record.id ? `record-${record.id}` : `record-local-${record.localId}`;
+        }
+
+        function isRecordGenerating(record) {
+            return record && record.generationStatus === 'generating';
+        }
+
+        function isRecordFailed(record) {
+            return record && record.generationStatus === 'failed';
+        }
+
+        function sortRecordsForTimeline(records) {
+            const list = [...records];
+            if (appState.filters.sort === 'recent') {
+                return list.sort((a, b) => (b.createdAt?.getTime?.() || 0) - (a.createdAt?.getTime?.() || 0));
+            }
+            return list.sort((a, b) => (b.date?.getTime?.() || 0) - (a.date?.getTime?.() || 0));
         }
 
         function ensureLocalId(record) {
@@ -1650,6 +1730,10 @@
             } finally {
                 appState.currentUser = null;
                 appState.records = [];
+                if (appState.generationPollTimer) {
+                    clearInterval(appState.generationPollTimer);
+                    appState.generationPollTimer = null;
+                }
                 closeWizard();
                 closeFlowerDetail();
                 renderAuthState();
@@ -1679,10 +1763,12 @@
         function normalizeApiRecord(apiRecord) {
             const date = new Date(apiRecord.recordDate || apiRecord.createdAt || Date.now());
             const flowerDetails = (apiRecord.flower_details || []).map(cleanFlowerDetail);
+            const generationStatus = apiRecord.generationStatus || 'ready';
+            const isGenerating = generationStatus === 'generating';
             return ensureLocalId({
                 id: apiRecord.id,
-                title: apiRecord.title || '未命名花束',
-                image: apiRecord.generatedImageUrl || apiRecord.originalImageUrl,
+                title: apiRecord.title || (isGenerating ? '图片生成中' : '未命名花束'),
+                image: apiRecord.generatedPreviewDataUrl || apiRecord.generatedImageUrl || apiRecord.originalImageUrl,
                 originalImageUrl: apiRecord.originalImageUrl,
                 generatedImageUrl: apiRecord.generatedImageUrl || apiRecord.originalImageUrl,
                 actionType: apiRecord.actionType || 'received',
@@ -1690,8 +1776,12 @@
                 style: apiRecord.style || 'original',
                 flowerDetails,
                 tags: flowerDetailsToTags(flowerDetails),
-                comment: apiRecord.comment || '这束花被认真记住了。',
-                story: apiRecord.story || ''
+                comment: apiRecord.comment || (isGenerating ? '图片生成中，请稍后。' : '这束花被认真记住了。'),
+                story: apiRecord.story || '',
+                createdAt: new Date(apiRecord.createdAt || apiRecord.recordDate || Date.now()),
+                updatedAt: new Date(apiRecord.updatedAt || apiRecord.createdAt || Date.now()),
+                generationStatus,
+                generationError: apiRecord.generationError || ''
             });
         }
 
@@ -1709,6 +1799,7 @@
             renderTimelineRecords();
             renderStatsSummary();
             renderFloraBook();
+            syncGenerationPolling();
         }
 
         async function reloadRecordsQuietly() {
@@ -1723,6 +1814,45 @@
                 renderTimelineRecords();
                 renderStatsSummary();
                 renderFloraBook();
+            }
+        }
+
+        function syncGenerationPolling() {
+            const hasGenerating = appState.records.some(isRecordGenerating);
+            if (!hasGenerating) {
+                if (appState.generationPollTimer) {
+                    clearInterval(appState.generationPollTimer);
+                    appState.generationPollTimer = null;
+                }
+                return;
+            }
+            if (appState.generationPollTimer) return;
+            appState.generationPollTimer = setInterval(pollGeneratingRecords, 4500);
+        }
+
+        async function pollGeneratingRecords() {
+            if (!appState.currentUser) return;
+            const before = new Map(appState.records.map(record => [record.id, record]));
+            try {
+                const response = await fetch('/api/records?year=all&actionType=all');
+                const data = await readApiJson(response, '花历加载失败。');
+                const nextRecords = (data.records || []).map(normalizeApiRecord);
+                const readyRecords = nextRecords.filter(record => {
+                    const old = before.get(record.id);
+                    return old && isRecordGenerating(old) && record.generationStatus === 'ready' && !appState.notifiedReadyRecords.has(record.id);
+                });
+                appState.records = nextRecords;
+                renderTimelineRecords();
+                renderStatsSummary();
+                renderFloraBook();
+                readyRecords.forEach(record => {
+                    appState.notifiedReadyRecords.add(record.id);
+                    showToast('图片已生成，请点击查看。');
+                    jumpToRecord(recordIdForDom(record));
+                });
+                syncGenerationPolling();
+            } catch (error) {
+                console.warn('[flora] polling failed', error);
             }
         }
 
@@ -1803,6 +1933,47 @@
             });
         }
 
+        async function startRecordGenerationFromApi() {
+            if (!requireLogin()) throw new Error('请先登录后再生成花束。');
+            const originalImageUrl = await uploadPhotoIfNeeded();
+            const storyInput = document.getElementById('wizard-story-input').value.trim();
+            const response = await fetch('/api/ai/start-record', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    originalImageUrl,
+                    actionType: appState.actionType,
+                    recordDate: formatDateKey(appState.selectedDate),
+                    story: storyInput,
+                    style: appState.visualStyle
+                })
+            });
+            const data = await readApiJson(response, '生成启动失败。');
+            return normalizeApiRecord(data.record);
+        }
+
+        function buildOptimisticGeneratingRecord() {
+            const storyInput = document.getElementById('wizard-story-input').value.trim();
+            return ensureLocalId({
+                title: '图片生成中',
+                image: appState.photoDataUrl,
+                originalImageUrl: appState.uploadedImageUrl || appState.photoDataUrl,
+                generatedImageUrl: appState.uploadedImageUrl || appState.photoDataUrl,
+                actionType: appState.actionType,
+                date: new Date(appState.selectedDate),
+                style: appState.visualStyle,
+                flowerDetails: [],
+                tags: [],
+                comment: '图片生成中，请稍后。',
+                story: storyInput,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+                generationStatus: 'generating',
+                generationError: '',
+                optimistic: true
+            });
+        }
+
         function startOfLocalDay(date) {
             return new Date(date.getFullYear(), date.getMonth(), date.getDate());
         }
@@ -1877,6 +2048,7 @@
 
         function jumpToTimeline() {
             setTimelineFilter('action', 'all');
+            setTimelineFilter('sort', 'recent', { toggle: false });
             setTimelineFilter('year', '2026', { toggle: false });
             switchTab('timeline');
             window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1884,6 +2056,7 @@
 
         function jumpToRecord(recordId) {
             setTimelineFilter('action', 'all');
+            setTimelineFilter('sort', 'recent', { toggle: false });
             setTimelineFilter('year', '2026', { toggle: false });
             switchTab('timeline');
             window.setTimeout(() => {
@@ -2312,7 +2485,7 @@
             const container = document.getElementById('timeline-container');
             const empty = document.getElementById('timeline-empty');
             container.querySelectorAll('.timeline-record').forEach(record => record.remove());
-            appState.records.forEach(record => appendTimelineRecord(record));
+            sortRecordsForTimeline(appState.records).forEach(record => appendTimelineRecord(record));
             container.appendChild(empty);
             applyTimelineFilters();
         }
@@ -2374,6 +2547,41 @@
             closeFlowerDetail();
         }
 
+        async function regenerateDetailRecord(event) {
+            if (event) event.stopPropagation();
+            if (!requireLogin()) return;
+            const record = appState.detailRecord && appState.records.find(item =>
+                item.id === appState.detailRecord.id || item.localId === appState.detailRecord.localId
+            );
+            if (!record?.id) return;
+            if (isRecordGenerating(record)) {
+                showToast('这张图片正在生成中。');
+                return;
+            }
+            try {
+                const response = await fetch(`/api/records/${encodeURIComponent(record.id)}/regenerate`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ style: record.style === 'original' ? 'watercolor' : record.style })
+                });
+                const data = await readApiJson(response, '重新生成失败。');
+                const updated = normalizeApiRecord(data.record);
+                const index = appState.records.findIndex(item => item.id === updated.id);
+                if (index >= 0) appState.records[index] = updated;
+                appState.detailRecord = updated;
+                renderTimelineRecords();
+                renderStatsSummary();
+                renderFloraBook();
+                syncGenerationPolling();
+                closeFlowerDetail();
+                switchTab('timeline');
+                jumpToRecord(recordIdForDom(updated));
+                showToast('图片重新生成中，请稍后。');
+            } catch (error) {
+                showToast(error.message || '重新生成失败。');
+            }
+        }
+
         function setTimelineFilter(group, value, options = {}) {
             const shouldToggle = options.toggle !== false;
             const currentButton = document.querySelector(`[data-filter-group="${group}"][data-filter-value="${value}"]`);
@@ -2384,8 +2592,8 @@
                 const selected = button.dataset.filterValue === nextValue;
                 button.classList.toggle('active', selected);
                 button.classList.toggle('text-[#86868B]', !selected);
-                button.classList.toggle('bg-white/70', !selected && group === 'year');
-                button.classList.toggle('border-white/80', !selected && group === 'year');
+                button.classList.toggle('bg-white/70', !selected && (group === 'year' || group === 'sort'));
+                button.classList.toggle('border-white/80', !selected && (group === 'year' || group === 'sort'));
             });
             applyTimelineFilters();
         }
@@ -2394,7 +2602,9 @@
             document.querySelectorAll('[data-filter-group]').forEach(button => {
                 if (button.dataset.filterGroup === 'year') return;
                 button.addEventListener('click', () => {
-                    setTimelineFilter(button.dataset.filterGroup, button.dataset.filterValue);
+                    setTimelineFilter(button.dataset.filterGroup, button.dataset.filterValue, {
+                        toggle: button.dataset.filterGroup !== 'sort'
+                    });
                 });
             });
         }
@@ -2427,22 +2637,37 @@
                 showToast('先选一张花束照片吧。');
                 return;
             }
-            const finishLoading = beginGenerationLoading();
-
+            const optimisticRecord = buildOptimisticGeneratingRecord();
+            appState.records = [optimisticRecord, ...appState.records];
+            closeWizard();
+            setTimelineFilter('sort', 'recent', { toggle: false });
+            renderTimelineRecords();
+            renderStatsSummary();
+            renderFloraBook();
+            switchTab('timeline');
+            jumpToRecord(recordIdForDom(optimisticRecord));
+            showToast('已放入花历，图片生成中，请稍后。');
             try {
-                appState.generatedRecord = await generateRecordFromApi();
-                finishLoading();
-                document.getElementById('step-3').classList.add('hidden');
-                renderGeneratedResult();
-                goToStep(4);
+                const pendingRecord = await startRecordGenerationFromApi();
+                const index = appState.records.findIndex(record => record.localId === optimisticRecord.localId);
+                if (index >= 0) {
+                    appState.records[index] = pendingRecord;
+                } else {
+                    appState.records = [pendingRecord, ...appState.records.filter(record => record.id !== pendingRecord.id)];
+                }
+                renderTimelineRecords();
+                renderStatsSummary();
+                renderFloraBook();
+                syncGenerationPolling();
+                jumpToRecord(recordIdForDom(pendingRecord));
             } catch (error) {
-                finishLoading();
-                document.getElementById('step-3').classList.add('hidden');
-                appState.generatedRecord = buildFallbackRecord(error.message || '生成失败，可以重试。');
-                appState.lastFailedRecord = appState.generatedRecord;
-                renderGeneratedResult();
-                showToast('生成失败，已保留原图，可以重试。');
-                goToStep(4);
+                optimisticRecord.generationStatus = 'failed';
+                optimisticRecord.generationError = error.message || '生成启动失败，请再试一次。';
+                optimisticRecord.comment = '生成启动失败，可以重新种下。';
+                renderTimelineRecords();
+                renderStatsSummary();
+                renderFloraBook();
+                showToast(error.message || '生成启动失败，请再试一次。');
             }
         }
 
@@ -2674,7 +2899,18 @@
             const safeTitle = escapeHtml(record.title);
             const safeComment = escapeHtml(record.comment);
             const domId = recordIdForDom(record);
-            const escapedRecordId = escapeHtml(record.id || record.localId);
+            const generating = isRecordGenerating(record);
+            const failed = isRecordFailed(record);
+            const statusOverlay = generating ? `
+                <div class="timeline-generating-overlay">
+                    <span class="timeline-generating-spinner"></span>
+                    <span class="timeline-generating-copy">图片生成中<br>请稍后</span>
+                </div>
+            ` : (failed ? `
+                <div class="timeline-generating-overlay">
+                    <span class="timeline-generating-copy">生成失败<br>点击重新生成</span>
+                </div>
+            ` : '');
             item.className = `timeline-record flex items-center w-full relative reveal-card ${isLeft ? 'left' : 'right'} cursor-pointer active:scale-[0.98] transition-transform`;
             item.dataset.action = record.actionType;
             item.dataset.year = String(record.date.getFullYear());
@@ -2682,11 +2918,12 @@
             item.innerHTML = `
                 <div class="absolute left-1/2 -translate-x-1/2 w-3 h-3 rounded-full bg-background border-2 border-primary shadow-glow z-20"></div>
                 ${isLeft ? '<div class="w-1/2 pr-4 flex justify-end">' : '<div class="w-1/2 pr-4"></div><div class="w-1/2 pl-4 flex justify-start">'}
-                    <div class="timeline-card glass-card bg-surface shadow-glass border border-white/80 transition-transform duration-300 hover:-translate-y-1">
+                    <div class="timeline-card ${generating ? 'generating' : ''} glass-card bg-surface shadow-glass border border-white/80 transition-transform duration-300 hover:-translate-y-1">
                         <div class="relative aspect-[3/4] overflow-hidden rounded-2xl mb-2 shadow-sm bg-[#F8F6F4]">
                             <img src="${imageSrc}" alt="${safeTitle}" class="object-contain w-full h-full">
                             <div class="absolute top-1.5 left-1.5 bg-white/90 backdrop-blur-sm px-2 py-0.5 rounded-full text-[9px] font-bold text-primary-dark shadow-sm">${escapeHtml(dateText)}</div>
                             <div class="absolute top-1.5 right-1.5 ${actionColor} text-white px-2 py-0.5 rounded-full text-[9px] shadow-sm">${actionText}</div>
+                            ${statusOverlay}
                         </div>
                         <div class="px-1 pb-1 pt-0.5">
                             <div class="flex items-center justify-between mb-1.5">
@@ -2706,20 +2943,39 @@
                     style: record.style,
                     originalImageUrl: record.originalImageUrl,
                     generatedImageUrl: record.generatedImageUrl,
+                    generationStatus: record.generationStatus,
+                    generationError: record.generationError,
                     id: record.id,
                     localId: record.localId
                 });
+                if (generating) showToast('图片生成中，请稍后。');
+                if (failed) showToast('图片生成失败，可以点击重新生成。');
             });
             const empty = document.getElementById('timeline-empty');
             container.insertBefore(item, empty);
         }
 
         function openFlowerDetail(title, tags, comment, imageSrc, story, meta = {}) {
-            appState.detailRecord = { title, image: imageSrc, id: meta.id, localId: meta.localId };
+            const record = appState.records.find(item => item.id === meta.id || item.localId === meta.localId);
+            appState.detailRecord = record || { title, image: imageSrc, id: meta.id, localId: meta.localId };
+            appState.detailEditMode = false;
             document.getElementById('detail-title').innerText = title;
-            document.getElementById('detail-comment').innerText = comment;
+            document.getElementById('detail-comment').innerText = String(comment || '').replace(/^“|”$/g, '');
             setImageSource(document.getElementById('detail-image'), imageSrc);
             document.getElementById('detail-style').innerText = styleTag(meta.style || 'original', meta.generatedImageUrl || imageSrc, meta.originalImageUrl || imageSrc);
+            const isGenerating = meta.generationStatus === 'generating';
+            const isFailed = meta.generationStatus === 'failed';
+            document.getElementById('detail-generating-overlay').classList.toggle('hidden', !isGenerating);
+            const statusNote = document.getElementById('detail-status-note');
+            if (isGenerating) {
+                statusNote.innerText = '图片生成中，请稍后。完成后会自动替换成生成图。';
+                statusNote.classList.remove('hidden');
+            } else if (isFailed) {
+                statusNote.innerText = meta.generationError || '图片生成失败，可以点击重新生成。';
+                statusNote.classList.remove('hidden');
+            } else {
+                statusNote.classList.add('hidden');
+            }
             const detailMeta = document.getElementById('detail-meta');
             if (meta.date || meta.action) {
                 document.getElementById('detail-date').innerText = meta.date || '';
@@ -2756,10 +3012,79 @@
             }
 
             document.getElementById('flower-detail-overlay').classList.add('active');
+            updateDetailEditState(false);
         }
 
         function closeFlowerDetail() {
             document.getElementById('flower-detail-overlay').classList.remove('active');
+            updateDetailEditState(false);
+        }
+
+        function updateDetailEditState(isEditing) {
+            appState.detailEditMode = isEditing;
+            const button = document.getElementById('detail-edit-button');
+            if (button) button.innerText = isEditing ? '保存编辑' : '编辑';
+            ['detail-title', 'detail-comment', 'detail-story'].forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.contentEditable = isEditing ? 'true' : 'false';
+                el.classList.toggle('editing', isEditing);
+            });
+            document.querySelectorAll('#detail-tags-container .flower-meaning-row').forEach(row => {
+                row.contentEditable = isEditing ? 'true' : 'false';
+                row.classList.toggle('editing', isEditing);
+            });
+        }
+
+        function collectDetailFlowerDetails() {
+            return Array.from(document.querySelectorAll('#detail-tags-container .flower-meaning-row')).map(row => {
+                const text = row.innerText.replace(/\s+/g, ' ').trim();
+                const normalized = text.replace(/^(\S+)\s*/, '');
+                const parts = normalized.split(/[:：]/);
+                return cleanFlowerDetail({
+                    name: parts[0] || '花材',
+                    meaning: parts.slice(1).join('：') || '等待补充花语'
+                });
+            }).filter(flower => flower.name && flower.meaning).slice(0, 5);
+        }
+
+        async function toggleDetailEdit(event) {
+            if (event) event.stopPropagation();
+            if (!requireLogin()) return;
+            const record = appState.detailRecord && appState.records.find(item =>
+                item.id === appState.detailRecord.id || item.localId === appState.detailRecord.localId
+            );
+            if (!record?.id) return;
+            if (!appState.detailEditMode) {
+                updateDetailEditState(true);
+                showToast('可以直接点击文字修改。');
+                return;
+            }
+            const payload = {
+                title: document.getElementById('detail-title').innerText.trim() || record.title,
+                comment: document.getElementById('detail-comment').innerText.trim() || record.comment,
+                story: document.getElementById('detail-story').innerText.trim(),
+                flower_details: collectDetailFlowerDetails()
+            };
+            try {
+                const response = await fetch(`/api/records/${encodeURIComponent(record.id)}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await readApiJson(response, '保存编辑失败。');
+                const updated = normalizeApiRecord(data.record);
+                const index = appState.records.findIndex(item => item.id === updated.id);
+                if (index >= 0) appState.records[index] = updated;
+                appState.detailRecord = updated;
+                renderTimelineRecords();
+                renderStatsSummary();
+                renderFloraBook();
+                updateDetailEditState(false);
+                showToast('编辑已保存。');
+            } catch (error) {
+                showToast(error.message || '保存编辑失败。');
+            }
         }
 
         function chunkArray(items, size) {
@@ -2875,6 +3200,8 @@
                     style: longestStory.style,
                     originalImageUrl: longestStory.originalImageUrl,
                     generatedImageUrl: longestStory.generatedImageUrl,
+                    generationStatus: longestStory.generationStatus,
+                    generationError: longestStory.generationError,
                     id: longestStory.id,
                     localId: longestStory.localId
                 });
@@ -2884,7 +3211,7 @@
                 longestCard.onclick = openWizard;
             }
 
-            const latest = records[0];
+            const latest = sortRecordsForTimeline(records)[0];
             const latestCard = document.getElementById('latest-record-card');
             if (latest) {
                 document.getElementById('latest-record-date').innerText = `${formatDateDot(latest.date)} 记录`;
