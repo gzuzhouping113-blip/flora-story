@@ -328,6 +328,7 @@
         .detail-image-actions {
             display: flex;
             justify-content: center;
+            gap: 8px;
             margin: 0 8px 12px;
         }
         .detail-regenerate-image-button {
@@ -938,7 +939,7 @@
                                 <p id="generated-preview-state-title" class="text-xs font-bold text-primary-dark">图片已生成，正在加载预览</p>
                                 <p id="generated-preview-state-detail" class="mt-1 text-[11px] text-[#86868B] leading-relaxed">图片已生成，正在加载预览。</p>
                             </div>
-                            <button id="peek-original-button" type="button" class="absolute left-2 top-2 rounded-full bg-white/90 px-3 py-1 text-[10px] font-bold text-primary-dark shadow-sm backdrop-blur">按住看原图</button>
+                            <button id="peek-original-button" type="button" class="absolute left-2 top-2 rounded-full bg-white/90 px-3 py-1 text-[10px] font-bold text-primary-dark shadow-sm backdrop-blur">原图预览</button>
                             <span id="generated-style-label" class="absolute right-2 top-2 rounded-full bg-[#1D1D1F]/70 px-2.5 py-1 text-[10px] font-bold text-white shadow-sm">治愈水彩</span>
                         </div>
                         
@@ -998,6 +999,7 @@
                     </div>
                     <div id="detail-status-note" class="detail-status-note hidden">图片生成中，请稍后。完成后会自动替换成生成图。</div>
                     <div class="detail-image-actions">
+                        <button type="button" id="detail-original-preview-button" onclick="toggleDetailOriginalPreview(event)" class="detail-regenerate-image-button">原图预览</button>
                         <button type="button" id="detail-regenerate-image-button" onclick="regenerateDetailRecord(event)" class="detail-regenerate-image-button">重新生成图片</button>
                     </div>
                     
@@ -1053,8 +1055,10 @@
             filters: { action: 'all', year: 'all', sort: 'recent' },
             floraPage: 0,
             generatedRecord: null,
+            generatedShowingOriginal: false,
             lastFailedRecord: null,
             detailRecord: null,
+            detailShowingOriginal: false,
             currentUser: null,
             records: [],
             isSavingGeneratedRecord: false,
@@ -1169,6 +1173,30 @@
                 || record.generatedImageUrl === record.originalImageUrl;
         }
 
+        function hasUsableGeneratedImage(record) {
+            return Boolean(
+                record
+                && record.style !== 'original'
+                && record.generatedImageUrl
+                && record.originalImageUrl
+                && record.generatedImageUrl !== record.originalImageUrl
+            );
+        }
+
+        function canDisplayInBouquetStrip(record) {
+            if (!record || record.generationStatus === 'failed' || record.generationStatus === 'generating') {
+                return false;
+            }
+            return record.style === 'original' || hasUsableGeneratedImage(record);
+        }
+
+        function recordDisplayImage(record) {
+            if (!record) return '';
+            if (hasUsableGeneratedImage(record)) return record.generatedImageUrl;
+            if (record.style === 'original') return record.originalImageUrl || record.image;
+            return record.image || record.originalImageUrl || record.generatedImageUrl || '';
+        }
+
         function actionLabel(actionType) {
             if (actionType === 'received') return '收到';
             if (actionType === 'sent') return '送出';
@@ -1191,8 +1219,16 @@
             return record && record.generationStatus === 'generating';
         }
 
+        function isRecordImagePending(record) {
+            return isRecordGenerating(record) && !hasUsableGeneratedImage(record) && record.style !== 'original';
+        }
+
         function isRecordFailed(record) {
             return record && record.generationStatus === 'failed';
+        }
+
+        function isRecordImageFailed(record) {
+            return isRecordFailed(record) && !hasUsableGeneratedImage(record);
         }
 
         function sortRecordsForTimeline(records) {
@@ -1670,6 +1706,8 @@
             const comment = document.getElementById('generated-comment');
             const tags = document.getElementById('generated-tags');
             const storyContainer = document.getElementById('wizard-story-container');
+            const originalButton = document.getElementById('peek-original-button');
+            appState.generatedShowingOriginal = false;
             if (appState.photoDataUrl) {
                 setGeneratedPreviewPlaceholder(appState.photoDataUrl);
             } else if (preview) {
@@ -1682,6 +1720,10 @@
             if (comment) comment.innerText = '“这束花正在慢慢成形。”';
             if (tags) tags.innerHTML = '';
             if (storyContainer) storyContainer.classList.add('hidden');
+            if (originalButton) {
+                originalButton.innerText = '原图预览';
+                originalButton.classList.remove('hidden');
+            }
         }
 
         function setAiProgress(index) {
@@ -2162,6 +2204,7 @@
             appState.photoFile = null;
             appState.uploadedImageUrl = '';
             appState.generatedRecord = null;
+            appState.generatedShowingOriginal = false;
             appState.lastFailedRecord = null;
             document.getElementById('flower-file-input').value = '';
             document.getElementById('wizard-story-input').value = '';
@@ -2494,20 +2537,10 @@
         function bindOriginalPeek() {
             const button = document.getElementById('peek-original-button');
             if (!button) return;
-            const showOriginal = event => {
+            button.addEventListener('click', event => {
                 event.preventDefault();
-                setPreviewImage(true);
-            };
-            const showGenerated = event => {
-                event.preventDefault();
-                setPreviewImage(false);
-            };
-            button.addEventListener('pointerdown', showOriginal);
-            button.addEventListener('pointerup', showGenerated);
-            button.addEventListener('pointercancel', showGenerated);
-            button.addEventListener('pointerleave', showGenerated);
-            button.addEventListener('touchstart', showOriginal, { passive: false });
-            button.addEventListener('touchend', showGenerated);
+                setPreviewImage(!appState.generatedShowingOriginal);
+            });
         }
 
         function setRecordSide(record, side) {
@@ -2769,6 +2802,8 @@
             if (!record) return;
             const preview = document.getElementById('generated-preview');
             const label = document.getElementById('generated-style-label');
+            const button = document.getElementById('peek-original-button');
+            appState.generatedShowingOriginal = Boolean(useOriginal);
             if (useOriginal) {
                 setGeneratedPreviewPlaceholder(appState.photoDataUrl);
             } else {
@@ -2779,6 +2814,7 @@
                 });
             }
             if (label) label.innerText = useOriginal ? '原图预览' : styleTag(record.style, record.generatedImageUrl, record.originalImageUrl);
+            if (button) button.innerText = useOriginal ? '返回生成图' : '原图预览';
         }
 
         function renderGeneratedResult() {
@@ -2786,12 +2822,19 @@
             if (!record) return;
 
             appState.isSavingGeneratedRecord = false;
+            appState.generatedShowingOriginal = false;
             const useOriginalPreview = shouldUseOriginalPreview(record);
             preloadGeneratedPreview(record.image, appState.photoDataUrl, {
                 showFallbackWhileLoading: useOriginalPreview,
                 allowFallbackOnError: useOriginalPreview
             });
             document.getElementById('generated-style-label').innerText = styleTag(record.style, record.generatedImageUrl, record.originalImageUrl);
+            const originalButton = document.getElementById('peek-original-button');
+            if (originalButton) {
+                const canPreviewOriginal = Boolean(record.originalImageUrl && hasUsableGeneratedImage(record));
+                originalButton.classList.toggle('hidden', !canPreviewOriginal);
+                originalButton.innerText = '原图预览';
+            }
             document.getElementById('generated-title').innerText = record.title;
             document.getElementById('generated-comment').innerText = `“${record.comment}”`;
             updateSaveGeneratedButton();
@@ -2870,10 +2913,12 @@
             const button = document.getElementById('save-generated-button');
             if (!button) return;
             const record = appState.generatedRecord;
+            const hasSaveableImage = record && (record.style === 'original' || hasUsableGeneratedImage(record));
             const disabled = appState.isSavingGeneratedRecord
                 || saved
                 || !record
                 || record.generationFailed
+                || !hasSaveableImage
                 || !record.flowerDetails?.length
                 || Boolean(record.saved);
             button.disabled = disabled;
@@ -2889,7 +2934,12 @@
                 showToast('这束花已经保存过了。');
                 return;
             }
-            if (appState.generatedRecord.generationFailed || !appState.generatedRecord.flowerDetails?.length) {
+            const hasSaveableImage = appState.generatedRecord.style === 'original' || hasUsableGeneratedImage(appState.generatedRecord);
+            if (appState.generatedRecord.generationFailed || !hasSaveableImage) {
+                showToast('图片还没有生成成功，请先重试生成。');
+                return;
+            }
+            if (!appState.generatedRecord.flowerDetails?.length) {
                 showToast('花朵还没有识别成功，请先重试生成。');
                 return;
             }
@@ -2963,13 +3013,14 @@
             const actionColor = actionBadgeColor(record.actionType);
             const dateText = `${String(record.date.getMonth() + 1).padStart(2, '0')}.${String(record.date.getDate()).padStart(2, '0')}`;
             const flowerMarkup = flowerStripMarkup(record.tags);
-            const imageSrc = escapeHtml(displayImageUrl(record.image));
+            const imageSrc = escapeHtml(displayImageUrl(recordDisplayImage(record)));
             const safeTitle = escapeHtml(record.title);
             const safeComment = escapeHtml(record.comment);
             const domId = recordIdForDom(record);
             const generating = isRecordGenerating(record);
-            const failed = isRecordFailed(record);
-            const statusOverlay = generating ? `
+            const imagePending = isRecordImagePending(record);
+            const failed = isRecordImageFailed(record);
+            const statusOverlay = imagePending ? `
                 <div class="timeline-generating-overlay">
                     <span class="timeline-generating-spinner"></span>
                     <span class="timeline-generating-copy">图片生成中<br>请稍后</span>
@@ -2986,7 +3037,7 @@
             item.innerHTML = `
                 <div class="absolute left-1/2 -translate-x-1/2 w-3 h-3 rounded-full bg-background border-2 border-primary shadow-glow z-20"></div>
                 ${isLeft ? '<div class="w-1/2 pr-4 flex justify-end">' : '<div class="w-1/2 pr-4"></div><div class="w-1/2 pl-4 flex justify-start">'}
-                    <div class="timeline-card ${generating ? 'generating' : ''} glass-card bg-surface shadow-glass border border-white/80 transition-transform duration-300 hover:-translate-y-1">
+                    <div class="timeline-card ${imagePending ? 'generating' : ''} glass-card bg-surface shadow-glass border border-white/80 transition-transform duration-300 hover:-translate-y-1">
                         <div class="relative aspect-[3/4] overflow-hidden rounded-2xl mb-2 shadow-sm bg-[#F8F6F4]">
                             <img src="${imageSrc}" alt="${safeTitle}" class="object-contain w-full h-full">
                             <div class="absolute top-1.5 left-1.5 bg-white/90 backdrop-blur-sm px-2 py-0.5 rounded-full text-[9px] font-bold text-primary-dark shadow-sm">${escapeHtml(dateText)}</div>
@@ -3016,7 +3067,7 @@
                     id: record.id,
                     localId: record.localId
                 });
-                if (generating) showToast('图片生成中，请稍后。');
+                if (imagePending) showToast('图片生成中，请稍后。');
                 if (failed) showToast('图片生成失败，可以点击重新生成。');
             });
             const empty = document.getElementById('timeline-empty');
@@ -3040,18 +3091,30 @@
 
         function renderFlowerDetail(record, fallbackMeta = {}) {
             const meta = detailRecordMeta(record, fallbackMeta);
-            const imageSrc = record.image || fallbackMeta.imageSrc || record.originalImageUrl || record.generatedImageUrl || '';
+            const generatedImageSrc = recordDisplayImage(record) || fallbackMeta.imageSrc || '';
+            const canPreviewOriginal = Boolean(record.originalImageUrl && hasUsableGeneratedImage(record));
+            if (!canPreviewOriginal) appState.detailShowingOriginal = false;
+            const imageSrc = appState.detailShowingOriginal
+                ? record.originalImageUrl
+                : generatedImageSrc;
             const tags = record.tags || flowerDetailsToTags(record.flowerDetails || []);
             appState.detailRecord = record;
             document.getElementById('detail-title').innerText = record.title || '未命名花束';
             document.getElementById('detail-comment').innerText = String(record.comment || '').replace(/^“|”$/g, '');
             setImageSource(document.getElementById('detail-image'), imageSrc, record.originalImageUrl || '');
-            document.getElementById('detail-style').innerText = styleTag(meta.style || 'original', meta.generatedImageUrl || imageSrc, meta.originalImageUrl || imageSrc);
-            const isGenerating = meta.generationStatus === 'generating';
-            const isFailed = meta.generationStatus === 'failed';
+            document.getElementById('detail-style').innerText = appState.detailShowingOriginal
+                ? '原图预览'
+                : styleTag(meta.style || 'original', meta.generatedImageUrl || imageSrc, meta.originalImageUrl || imageSrc);
+            const isGenerating = isRecordImagePending(record);
+            const isFailed = isRecordImageFailed(record);
             document.getElementById('detail-generating-overlay').classList.toggle('hidden', !isGenerating);
+            const originalButton = document.getElementById('detail-original-preview-button');
+            if (originalButton) {
+                originalButton.classList.toggle('hidden', !canPreviewOriginal);
+                originalButton.innerText = appState.detailShowingOriginal ? '返回生成图' : '原图预览';
+            }
             const regenerateButton = document.getElementById('detail-regenerate-image-button');
-            if (regenerateButton) regenerateButton.disabled = isGenerating;
+            if (regenerateButton) regenerateButton.disabled = isRecordGenerating(record);
             const statusNote = document.getElementById('detail-status-note');
             if (isGenerating) {
                 statusNote.innerText = '图片生成中，请稍后。完成后会自动替换成生成图。';
@@ -3124,13 +3187,25 @@
                 localId: meta.localId
             });
             appState.detailEditMode = false;
+            appState.detailShowingOriginal = false;
             renderFlowerDetail(record, { ...meta, imageSrc });
             document.getElementById('flower-detail-overlay').classList.add('active');
             updateDetailEditState(false);
         }
 
+        function toggleDetailOriginalPreview(event) {
+            if (event) event.stopPropagation();
+            const record = appState.detailRecord && appState.records.find(item =>
+                item.id === appState.detailRecord.id || item.localId === appState.detailRecord.localId
+            );
+            if (!record || !record.originalImageUrl || !hasUsableGeneratedImage(record)) return;
+            appState.detailShowingOriginal = !appState.detailShowingOriginal;
+            renderFlowerDetail(record);
+        }
+
         function closeFlowerDetail() {
             document.getElementById('flower-detail-overlay').classList.remove('active');
+            appState.detailShowingOriginal = false;
             updateDetailEditState(false);
         }
 
@@ -3245,7 +3320,8 @@
             if (!strip) return;
             strip.innerHTML = '';
             const maxVisible = 12;
-            const records = appState.records.slice(0, maxVisible);
+            const displayableRecords = appState.records.filter(canDisplayInBouquetStrip);
+            const records = displayableRecords.slice(0, maxVisible);
             if (records.length === 0) {
                 strip.innerHTML = '<button type="button" class="quiet-empty-action absolute inset-0 flex items-center justify-center text-center text-sm font-serif active:scale-[0.98]">还没有花束，先种下一朵吧。</button>';
                 strip.querySelector('button').addEventListener('click', openWizard);
@@ -3276,12 +3352,12 @@
                 button.style.zIndex = String(10 + index);
                 button.setAttribute('aria-label', `查看${record.title}`);
                 button.innerHTML = `
-                    <img src="${escapeHtml(displayImageUrl(record.image))}" alt="${escapeHtml(record.title)}" class="bouquet-image">
+                    <img src="${escapeHtml(displayImageUrl(recordDisplayImage(record)))}" alt="${escapeHtml(record.title)}" class="bouquet-image">
                 `;
                 button.addEventListener('click', () => jumpToRecord(recordIdForDom(record)));
                 strip.appendChild(button);
             });
-            const hiddenCount = appState.records.length - records.length;
+            const hiddenCount = displayableRecords.length - records.length;
             if (hiddenCount > 0) {
                 const moreButton = document.createElement('button');
                 moreButton.type = 'button';
