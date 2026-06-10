@@ -68,11 +68,25 @@
             color: white;
             box-shadow: 0 8px 25px -5px rgba(210, 165, 179, 0.4);
         }
-        .filter-pill.year-pill.active {
+        .timeline-scope-pill {
+            width: 100px;
+            min-width: 100px;
+            height: 40px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 !important;
+            box-sizing: border-box;
             background: rgba(255, 255, 255, 0.92);
             color: #A67684;
-            border-color: rgba(210, 165, 179, 0.78);
-            box-shadow: 0 8px 20px -14px rgba(166, 118, 132, 0.48);
+            border-color: rgba(210, 165, 179, 0.72);
+            box-shadow: 0 8px 20px -14px rgba(166, 118, 132, 0.35);
+        }
+        .timeline-scope-pill.active {
+            background: #D2A5B3;
+            color: white;
+            border-color: rgba(210, 165, 179, 0.95);
+            box-shadow: 0 8px 25px -5px rgba(210, 165, 179, 0.4);
         }
         .quiet-empty-action {
             color: #86868B;
@@ -245,6 +259,18 @@
         .flower-meaning-text {
             color: #5E6C79;
         }
+        .flower-meaning-name.editing,
+        .flower-meaning-text.editing {
+            display: inline-block;
+            min-width: 3em;
+            outline: 1.5px solid rgba(210, 165, 179, 0.9);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.76);
+            padding: 1px 4px;
+        }
+        .flower-meaning-text.editing {
+            min-width: 8em;
+        }
         .timeline-card {
             position: relative;
             width: min(100%, 172px);
@@ -298,6 +324,32 @@
             line-height: 1.5;
             padding: 10px 12px;
             text-align: center;
+        }
+        .detail-image-actions {
+            display: flex;
+            justify-content: center;
+            margin: 0 8px 12px;
+        }
+        .detail-regenerate-image-button {
+            border-radius: 999px;
+            padding: 10px 16px;
+            background: #FFFFFF;
+            border: 1px solid rgba(210, 165, 179, 0.45);
+            color: #A67684;
+            font-size: 11px;
+            font-weight: 800;
+            line-height: 1;
+            box-shadow: 0 1px 2px rgba(29, 29, 31, 0.04);
+            transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+        }
+        .detail-regenerate-image-button:hover {
+            background: rgba(246, 235, 237, 0.45);
+            border-color: rgba(166, 118, 132, 0.55);
+            transform: translateY(-1px);
+        }
+        .detail-regenerate-image-button:disabled {
+            opacity: 0.48;
+            transform: none;
         }
         .editable-field.editing {
             outline: 1.5px solid rgba(210, 165, 179, 0.9);
@@ -636,8 +688,8 @@
                 <button data-filter-group="action" data-filter-value="self" class="filter-pill flex-1 py-2 rounded-full text-xs font-bold text-[#86868B]">送自己</button>
             </div>
             <div class="flex justify-center gap-2">
-                <button data-filter-group="sort" data-filter-value="recent" class="filter-pill active px-5 py-2 rounded-full text-xs font-bold border border-primary/70 bg-white/90 text-primary-dark">最近</button>
-                <button onclick="toggleYearFilter('2026')" data-filter-group="year" data-filter-value="2026" class="filter-pill year-pill active px-6 py-2 rounded-full text-xs font-bold border border-primary/70 bg-white/90 text-primary-dark">2026</button>
+                <button data-filter-group="sort" data-filter-value="recent" class="filter-pill timeline-scope-pill active rounded-full text-xs font-bold border">最近</button>
+                <button onclick="toggleYearFilter('2026')" data-filter-group="year" data-filter-value="2026" class="filter-pill timeline-scope-pill rounded-full text-xs font-bold border">2026</button>
             </div>
         </div>
 
@@ -945,6 +997,9 @@
                         <span id="detail-style" class="absolute right-2 top-2 rounded-full bg-[#1D1D1F]/70 px-2.5 py-1 text-[10px] font-bold text-white shadow-sm">治愈水彩</span>
                     </div>
                     <div id="detail-status-note" class="detail-status-note hidden">图片生成中，请稍后。完成后会自动替换成生成图。</div>
+                    <div class="detail-image-actions">
+                        <button type="button" id="detail-regenerate-image-button" onclick="regenerateDetailRecord(event)" class="detail-regenerate-image-button">重新生成图片</button>
+                    </div>
                     
                     <div class="px-2 mb-6 relative">
                         <span class="absolute -top-1 -left-1 text-2xl text-primary opacity-30 font-serif leading-none">"</span>
@@ -973,7 +1028,6 @@
                     <p id="detail-story" class="text-sm text-[#1D1D1F] leading-relaxed bg-white p-4 rounded-2xl border border-gray-100 shadow-sm min-h-[5rem]"></p>
                     <div class="detail-actions">
                         <button type="button" id="detail-edit-button" onclick="toggleDetailEdit(event)" class="detail-action-button">编辑</button>
-                        <button type="button" onclick="regenerateDetailRecord(event)" class="detail-action-button">重新生成</button>
                         <button type="button" onclick="downloadDetailCard(event)" class="detail-action-button">下载卡片</button>
                         <button type="button" onclick="deleteDetailRecord(event)" class="detail-action-button delete">删除卡片</button>
                     </div>
@@ -996,7 +1050,7 @@
             photoDataUrl: '',
             photoFile: null,
             uploadedImageUrl: '',
-            filters: { action: 'all', year: '2026', sort: 'recent' },
+            filters: { action: 'all', year: 'all', sort: 'recent' },
             floraPage: 0,
             generatedRecord: null,
             lastFailedRecord: null,
@@ -1765,9 +1819,13 @@
             const flowerDetails = (apiRecord.flower_details || []).map(cleanFlowerDetail);
             const generationStatus = apiRecord.generationStatus || 'ready';
             const isGenerating = generationStatus === 'generating';
+            const apiTitle = String(apiRecord.title || '').trim();
+            const apiComment = String(apiRecord.comment || '').trim();
             return ensureLocalId({
                 id: apiRecord.id,
-                title: apiRecord.title || (isGenerating ? '图片生成中' : '未命名花束'),
+                title: isGenerating
+                    ? (apiTitle && apiTitle !== '图片生成中' ? apiTitle : '正在整理标题')
+                    : (apiTitle || '未命名花束'),
                 image: apiRecord.generatedPreviewDataUrl || apiRecord.generatedImageUrl || apiRecord.originalImageUrl,
                 originalImageUrl: apiRecord.originalImageUrl,
                 generatedImageUrl: apiRecord.generatedImageUrl || apiRecord.originalImageUrl,
@@ -1776,7 +1834,9 @@
                 style: apiRecord.style || 'original',
                 flowerDetails,
                 tags: flowerDetailsToTags(flowerDetails),
-                comment: apiRecord.comment || (isGenerating ? '图片生成中，请稍后。' : '这束花被认真记住了。'),
+                comment: isGenerating
+                    ? (apiComment && apiComment !== '图片生成中，请稍后。' ? apiComment : '花语和评语正在整理。')
+                    : (apiComment || '这束花被认真记住了。'),
                 story: apiRecord.story || '',
                 createdAt: new Date(apiRecord.createdAt || apiRecord.recordDate || Date.now()),
                 updatedAt: new Date(apiRecord.updatedAt || apiRecord.createdAt || Date.now()),
@@ -1845,6 +1905,7 @@
                 renderTimelineRecords();
                 renderStatsSummary();
                 renderFloraBook();
+                refreshOpenDetailFromRecords();
                 readyRecords.forEach(record => {
                     appState.notifiedReadyRecords.add(record.id);
                     showToast('图片已生成，请点击查看。');
@@ -1955,7 +2016,7 @@
         function buildOptimisticGeneratingRecord() {
             const storyInput = document.getElementById('wizard-story-input').value.trim();
             return ensureLocalId({
-                title: '图片生成中',
+                title: '正在识别花束',
                 image: appState.photoDataUrl,
                 originalImageUrl: appState.uploadedImageUrl || appState.photoDataUrl,
                 generatedImageUrl: appState.uploadedImageUrl || appState.photoDataUrl,
@@ -1964,7 +2025,7 @@
                 style: appState.visualStyle,
                 flowerDetails: [],
                 tags: [],
-                comment: '图片生成中，请稍后。',
+                comment: '花语和评语正在整理。',
                 story: storyInput,
                 createdAt: new Date(),
                 updatedAt: new Date(),
@@ -2049,7 +2110,6 @@
         function jumpToTimeline() {
             setTimelineFilter('action', 'all');
             setTimelineFilter('sort', 'recent', { toggle: false });
-            setTimelineFilter('year', '2026', { toggle: false });
             switchTab('timeline');
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
@@ -2057,7 +2117,6 @@
         function jumpToRecord(recordId) {
             setTimelineFilter('action', 'all');
             setTimelineFilter('sort', 'recent', { toggle: false });
-            setTimelineFilter('year', '2026', { toggle: false });
             switchTab('timeline');
             window.setTimeout(() => {
                 const record = document.getElementById(recordId);
@@ -2081,17 +2140,7 @@
         }
 
         function toggleYearFilter(year) {
-            const button = document.querySelector(`[data-filter-group="year"][data-filter-value="${year}"]`);
-            const shouldClear = button && button.classList.contains('active');
-            appState.filters.year = shouldClear ? 'all' : year;
-            document.querySelectorAll('[data-filter-group="year"]').forEach(item => {
-                const selected = !shouldClear && item.dataset.filterValue === year;
-                item.classList.toggle('active', selected);
-                item.classList.toggle('text-[#86868B]', !selected);
-                item.classList.toggle('bg-white/70', !selected);
-                item.classList.toggle('border-white/80', !selected);
-            });
-            applyTimelineFilters();
+            setTimelineFilter('year', year);
         }
 
         function openWizard() {
@@ -2588,14 +2637,33 @@
             const alreadySelected = currentButton && currentButton.classList.contains('active');
             const nextValue = group === 'year' && shouldToggle && alreadySelected ? 'all' : value;
             appState.filters[group] = nextValue;
+            if (group === 'sort' && value === 'recent') {
+                appState.filters.sort = 'recent';
+                appState.filters.year = 'all';
+                renderTimelineScopePills('sort', value);
+                renderTimelineRecords();
+                return;
+            }
+            if (group === 'year') {
+                appState.filters.sort = nextValue === 'all' ? 'recent' : 'date';
+                appState.filters.year = nextValue;
+                renderTimelineScopePills(nextValue === 'all' ? 'sort' : 'year', nextValue === 'all' ? 'recent' : nextValue);
+                renderTimelineRecords();
+                return;
+            }
             document.querySelectorAll(`[data-filter-group="${group}"]`).forEach(button => {
                 const selected = button.dataset.filterValue === nextValue;
                 button.classList.toggle('active', selected);
                 button.classList.toggle('text-[#86868B]', !selected);
-                button.classList.toggle('bg-white/70', !selected && (group === 'year' || group === 'sort'));
-                button.classList.toggle('border-white/80', !selected && (group === 'year' || group === 'sort'));
             });
             applyTimelineFilters();
+        }
+
+        function renderTimelineScopePills(activeGroup = 'sort', activeValue = 'recent') {
+            document.querySelectorAll('.timeline-scope-pill').forEach(button => {
+                const selected = button.dataset.filterGroup === activeGroup && button.dataset.filterValue === activeValue;
+                button.classList.toggle('active', selected);
+            });
         }
 
         function bindFilters() {
@@ -2776,8 +2844,8 @@
                 <div class="flower-meaning-row">
                     <span class="flower-meaning-icon">${escapeHtml(flower.icon)}</span>
                     <span class="min-w-0">
-                        <span class="flower-meaning-name">${escapeHtml(flower.name || '花材')}：</span>
-                        <span class="flower-meaning-text">${escapeHtml(flower.meaning || '心意')}</span>
+                        <span class="flower-meaning-name" data-field="name">${escapeHtml(flower.name || '花材')}</span><span aria-hidden="true">：</span>
+                        <span class="flower-meaning-text" data-field="meaning">${escapeHtml(flower.meaning || '心意')}</span>
                     </span>
                 </div>
             `;
@@ -2955,23 +3023,41 @@
             container.insertBefore(item, empty);
         }
 
-        function openFlowerDetail(title, tags, comment, imageSrc, story, meta = {}) {
-            const record = appState.records.find(item => item.id === meta.id || item.localId === meta.localId);
-            appState.detailRecord = record || { title, image: imageSrc, id: meta.id, localId: meta.localId };
-            appState.detailEditMode = false;
-            document.getElementById('detail-title').innerText = title;
-            document.getElementById('detail-comment').innerText = String(comment || '').replace(/^“|”$/g, '');
-            setImageSource(document.getElementById('detail-image'), imageSrc);
+        function detailRecordMeta(record, fallbackMeta = {}) {
+            if (!record) return fallbackMeta;
+            return {
+                date: record.date ? `${formatDateDot(record.date)} · ${weekLabel(record.date)}` : fallbackMeta.date,
+                action: actionLabel(record.actionType),
+                style: record.style,
+                originalImageUrl: record.originalImageUrl,
+                generatedImageUrl: record.generatedImageUrl,
+                generationStatus: record.generationStatus,
+                generationError: record.generationError,
+                id: record.id,
+                localId: record.localId
+            };
+        }
+
+        function renderFlowerDetail(record, fallbackMeta = {}) {
+            const meta = detailRecordMeta(record, fallbackMeta);
+            const imageSrc = record.image || fallbackMeta.imageSrc || record.originalImageUrl || record.generatedImageUrl || '';
+            const tags = record.tags || flowerDetailsToTags(record.flowerDetails || []);
+            appState.detailRecord = record;
+            document.getElementById('detail-title').innerText = record.title || '未命名花束';
+            document.getElementById('detail-comment').innerText = String(record.comment || '').replace(/^“|”$/g, '');
+            setImageSource(document.getElementById('detail-image'), imageSrc, record.originalImageUrl || '');
             document.getElementById('detail-style').innerText = styleTag(meta.style || 'original', meta.generatedImageUrl || imageSrc, meta.originalImageUrl || imageSrc);
             const isGenerating = meta.generationStatus === 'generating';
             const isFailed = meta.generationStatus === 'failed';
             document.getElementById('detail-generating-overlay').classList.toggle('hidden', !isGenerating);
+            const regenerateButton = document.getElementById('detail-regenerate-image-button');
+            if (regenerateButton) regenerateButton.disabled = isGenerating;
             const statusNote = document.getElementById('detail-status-note');
             if (isGenerating) {
                 statusNote.innerText = '图片生成中，请稍后。完成后会自动替换成生成图。';
                 statusNote.classList.remove('hidden');
             } else if (isFailed) {
-                statusNote.innerText = meta.generationError || '图片生成失败，可以点击重新生成。';
+                statusNote.innerText = meta.generationError || '图片生成失败，可以点击重新生成图片。';
                 statusNote.classList.remove('hidden');
             } else {
                 statusNote.classList.add('hidden');
@@ -2986,11 +3072,10 @@
                 detailMeta.classList.add('hidden');
                 detailMeta.classList.remove('flex');
             }
-            
+
             const tagsContainer = document.getElementById('detail-tags-container');
             const tagsWrapper = document.getElementById('detail-tags-wrapper');
-            tagsContainer.innerHTML = ''; 
-            
+            tagsContainer.innerHTML = '';
             if (tags && tags.length > 0) {
                 tagsWrapper.style.display = 'block';
                 tags.forEach(tag => {
@@ -3001,16 +3086,45 @@
             } else {
                 tagsWrapper.style.display = 'none';
             }
-            
+
             const storyEl = document.getElementById('detail-story');
-            if (story) {
-                storyEl.innerText = story;
+            if (record.story) {
+                storyEl.innerText = record.story;
+                storyEl.dataset.emptyStory = 'false';
                 storyEl.classList.remove('text-gray-400', 'italic');
             } else {
-                storyEl.innerText = "那天忘了写下故事，但花香依然记得。";
+                storyEl.innerText = '那天忘了写下故事，但花香依然记得。';
+                storyEl.dataset.emptyStory = 'true';
                 storyEl.classList.add('text-gray-400', 'italic');
             }
+        }
 
+        function refreshOpenDetailFromRecords() {
+            const overlay = document.getElementById('flower-detail-overlay');
+            if (!overlay.classList.contains('active') || !appState.detailRecord || appState.detailEditMode) return;
+            const current = appState.records.find(item =>
+                item.id === appState.detailRecord.id || item.localId === appState.detailRecord.localId
+            );
+            if (current) renderFlowerDetail(current);
+        }
+
+        function openFlowerDetail(title, tags, comment, imageSrc, story, meta = {}) {
+            const record = appState.records.find(item => item.id === meta.id || item.localId === meta.localId) || ensureLocalId({
+                title,
+                tags,
+                comment: String(comment || '').replace(/^“|”$/g, ''),
+                image: imageSrc,
+                story,
+                style: meta.style || 'original',
+                originalImageUrl: meta.originalImageUrl || imageSrc,
+                generatedImageUrl: meta.generatedImageUrl || imageSrc,
+                generationStatus: meta.generationStatus || 'ready',
+                generationError: meta.generationError || '',
+                id: meta.id,
+                localId: meta.localId
+            });
+            appState.detailEditMode = false;
+            renderFlowerDetail(record, { ...meta, imageSrc });
             document.getElementById('flower-detail-overlay').classList.add('active');
             updateDetailEditState(false);
         }
@@ -3027,23 +3141,30 @@
             ['detail-title', 'detail-comment', 'detail-story'].forEach(id => {
                 const el = document.getElementById(id);
                 if (!el) return;
+                if (id === 'detail-story' && isEditing && el.dataset.emptyStory === 'true') {
+                    el.innerText = '';
+                    el.dataset.emptyStory = 'false';
+                    el.classList.remove('text-gray-400', 'italic');
+                }
                 el.contentEditable = isEditing ? 'true' : 'false';
                 el.classList.toggle('editing', isEditing);
             });
             document.querySelectorAll('#detail-tags-container .flower-meaning-row').forEach(row => {
-                row.contentEditable = isEditing ? 'true' : 'false';
                 row.classList.toggle('editing', isEditing);
+                row.querySelectorAll('[data-field="name"], [data-field="meaning"]').forEach(field => {
+                    field.contentEditable = isEditing ? 'true' : 'false';
+                    field.classList.toggle('editing', isEditing);
+                });
             });
         }
 
         function collectDetailFlowerDetails() {
             return Array.from(document.querySelectorAll('#detail-tags-container .flower-meaning-row')).map(row => {
-                const text = row.innerText.replace(/\s+/g, ' ').trim();
-                const normalized = text.replace(/^(\S+)\s*/, '');
-                const parts = normalized.split(/[:：]/);
+                const name = row.querySelector('[data-field="name"]')?.innerText.trim();
+                const meaning = row.querySelector('[data-field="meaning"]')?.innerText.trim();
                 return cleanFlowerDetail({
-                    name: parts[0] || '花材',
-                    meaning: parts.slice(1).join('：') || '等待补充花语'
+                    name: name || '花材',
+                    meaning: meaning || '等待补充花语'
                 });
             }).filter(flower => flower.name && flower.meaning).slice(0, 5);
         }
@@ -3063,7 +3184,9 @@
             const payload = {
                 title: document.getElementById('detail-title').innerText.trim() || record.title,
                 comment: document.getElementById('detail-comment').innerText.trim() || record.comment,
-                story: document.getElementById('detail-story').innerText.trim(),
+                story: document.getElementById('detail-story').dataset.emptyStory === 'true'
+                    ? ''
+                    : document.getElementById('detail-story').innerText.trim(),
                 flower_details: collectDetailFlowerDetails()
             };
             try {
@@ -3080,6 +3203,8 @@
                 renderTimelineRecords();
                 renderStatsSummary();
                 renderFloraBook();
+                appState.detailEditMode = false;
+                renderFlowerDetail(updated);
                 updateDetailEditState(false);
                 showToast('编辑已保存。');
             } catch (error) {
