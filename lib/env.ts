@@ -16,7 +16,8 @@ function readStorageProvider(): StorageProvider {
 function readOpenAiBaseUrl() {
   const baseUrl = (process.env.OPENAI_BASE_URL || process.env.GPT_BASE_URL || "https://api.openai.com/v1")
     .replace(/\/+$/, "");
-  return baseUrl.endsWith("/v1") ? baseUrl : `${baseUrl}/v1`;
+  if (/\/v\d*$/i.test(baseUrl)) return baseUrl;
+  return `${baseUrl}/v1`;
 }
 
 export const env = {
