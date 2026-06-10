@@ -335,6 +335,32 @@
             gap: 8px;
             margin: 0 8px 12px;
         }
+        .detail-original-preview-button {
+            position: absolute;
+            left: 8px;
+            top: 8px;
+            z-index: 24;
+            border-radius: 999px;
+            padding: 6px 12px;
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.82);
+            color: #8F6370;
+            font-size: 10px;
+            font-weight: 800;
+            line-height: 1;
+            box-shadow: 0 6px 18px rgba(29, 29, 31, 0.12);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            transition: background 0.18s ease, color 0.18s ease, transform 0.18s ease;
+        }
+        .detail-original-preview-button:hover {
+            background: #D2A5B3;
+            color: #FFFFFF;
+            transform: translateY(-1px);
+        }
+        .detail-original-preview-button.hidden {
+            display: none !important;
+        }
         .detail-regenerate-image-button {
             border-radius: 999px;
             padding: 10px 16px;
@@ -995,6 +1021,7 @@
                 <div class="bg-white rounded-3xl p-4 shadow-sm border border-gray-100 mb-6">
                     <div class="relative mx-auto aspect-[3/4] w-full max-w-[400px] max-h-[62vh] overflow-hidden rounded-2xl mb-3 bg-[#F8F6F4] shadow-sm">
                         <img id="detail-image" src="" class="w-full h-full object-contain" alt="Flower">
+                        <button type="button" id="detail-original-preview-button" onclick="toggleDetailOriginalPreview(event)" class="detail-original-preview-button hidden">原图预览</button>
                         <div id="detail-generating-overlay" class="detail-generating-overlay hidden">
                             <span class="detail-generating-spinner"></span>
                             <span class="text-xs font-bold">图片生成中，请稍后</span>
@@ -1003,7 +1030,6 @@
                     </div>
                     <div id="detail-status-note" class="detail-status-note hidden">图片生成中，请稍后。完成后会自动替换成生成图。</div>
                     <div class="detail-image-actions">
-                        <button type="button" id="detail-original-preview-button" onclick="toggleDetailOriginalPreview(event)" class="detail-regenerate-image-button">原图预览</button>
                         <button type="button" id="detail-regenerate-image-button" onclick="regenerateDetailRecord(event)" class="detail-regenerate-image-button">重新生成图片</button>
                     </div>
                     
